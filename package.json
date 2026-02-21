@@ -1,0 +1,24 @@
+{
+  "name": "halal-map",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Halal delivery marketplace MVP",
+  "scripts": {
+    "dev:api": "pnpm --filter api dev",
+    "dev:restaurant": "pnpm --filter restaurant-dashboard dev",
+    "dev:admin": "pnpm --filter admin dev",
+    "build:api": "pnpm --filter api build",
+    "build:restaurant": "pnpm --filter restaurant-dashboard build",
+    "build:admin": "pnpm --filter admin build",
+    "db:generate": "pnpm --filter api exec prisma generate",
+    "db:migrate": "pnpm --filter api exec prisma migrate dev",
+    "db:push": "pnpm --filter api exec prisma db push",
+    "db:seed": "pnpm --filter api exec prisma db seed",
+    "db:studio": "pnpm --filter api exec prisma studio",
+    "test:api": "pnpm --filter api test:run"
+  },
+  "packageManager": "pnpm@9.14.2",
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  RESTAURANT_OWNER
+  ADMIN
+}
+
+enum HalalStatus {
+  CERTIFIED_HALAL
+  MUSLIM_OWNED
+  HALAL_FRIENDLY
+  PROCLAIMED_HALAL
+  SOME_HALAL
+}
+
+enum OrderStatus {
+  PENDING
+  ACCEPTED
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum DeliveryType {
+  PICKUP
+  DELIVERY
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         UserRole  @default(CUSTOMER)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  addresses   Address[]
+  restaurant  Restaurant?
+  orders      Order[]
+}
+
+model Address {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String?
+  street    String
+  city      String
+  state     String?
+  postalCode String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  orders Order[] @relation("DeliveryAddress")
+}
+
+model Restaurant {
+  id                   String      @id @default(cuid())
+  ownerId              String      @unique
+  owner                User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name                 String
+  description          String?
+  phone                String?
+  address              String
+  latitude             Float?
+  longitude            Float?
+  halalStatus          HalalStatus
+  certificateUrl       String?
+  certificateExpiresAt DateTime?
+  approved             Boolean     @default(false)
+  businessHours        Json?       // e.g. { "mon": { "open": "09:00", "close": "21:00" }, ... }
+  offersPickup         Boolean     @default(true)
+  offersDelivery       Boolean     @default(false)
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  menuCategories MenuCategory[]
+  orders        Order[]
+}
+
+model MenuCategory {
+  id           String     @id @default(cuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  name         String
+  sortOrder    Int        @default(0)
+
+  items MenuItem[]
+}
+
+model MenuItem {
+  id          String       @id @default(cuid())
+  categoryId  String
+  category    MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  price       Decimal      @db.Decimal(10, 2)
+  imageUrl    String?
+  isAvailable Boolean      @default(true)
+  sortOrder   Int          @default(0)
+
+  orderItems OrderItem[]
+}
+
+model Order {
+  id                     String        @id @default(cuid())
+  userId                 String
+  user                   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  restaurantId           String
+  restaurant             Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  status                 OrderStatus   @default(PENDING)
+  totalPrice             Decimal       @db.Decimal(10, 2)
+  deliveryType           DeliveryType
+  deliveryAddressId      String?
+  deliveryAddress        Address?      @relation("DeliveryAddress", fields: [deliveryAddressId], references: [id])
+  stripePaymentIntentId  String?       @unique
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  items OrderItem[]
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+  quantity   Int
+  priceAtOrder Decimal @db.Decimal(10, 2)
+
+  @@unique([orderId, menuItemId])
+}

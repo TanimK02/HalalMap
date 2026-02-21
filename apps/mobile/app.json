@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "Halal Map",
+    "slug": "halal-map",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#F7F7F5"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.halalmap.app"
+    },
+    "android": {
+      "package": "com.halalmap.app"
+    },
+    "scheme": "halalmap"
+  }
+}
