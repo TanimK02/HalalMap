@@ -11,6 +11,7 @@ import {
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { api } from '../api';
 import { useCart } from '../context/CartContext';
+import { ViewCartBar } from '../components/ViewCartBar';
 import { brand, halalBadgeStyles, HALAL_LABELS } from '../theme';
 
 type MenuCategory = {
@@ -25,7 +26,7 @@ type RestaurantDetailData = {
   name: string;
   description: string | null;
   address: string;
-  halalStatus: string;
+  halalStatuses: string[];
   menuCategories: MenuCategory[];
 };
 
@@ -35,7 +36,7 @@ export default function RestaurantDetail() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<{ params: RouteParams }, 'params'>>();
   const { restaurantId, name: restaurantName } = route.params ?? { restaurantId: '', name: '' };
-  const { addItem, restaurantId: cartRestaurantId } = useCart();
+  const { addItem, items, restaurantId: cartRestaurantId } = useCart();
   const [data, setData] = useState<RestaurantDetailData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -88,64 +89,81 @@ export default function RestaurantDetail() {
     );
   }
 
-  const badgeStyle = halalBadgeStyles[data.halalStatus] ?? { bg: '#E5E7EB', text: '#1F2933' };
+  const badgeStyle = (status: string) => halalBadgeStyles[status] ?? { bg: '#E5E7EB', text: '#1F2933' };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{data.name}</Text>
-        <View style={[styles.badge, { backgroundColor: badgeStyle.bg }]}>
-          <Text style={[styles.badgeText, { color: badgeStyle.text }]}>
-            {HALAL_LABELS[data.halalStatus] ?? data.halalStatus}
-          </Text>
-        </View>
-      </View>
-      {data.description ? (
-        <Text style={styles.desc}>{data.description}</Text>
-      ) : null}
-      <Text style={styles.address}>{data.address}</Text>
-
-      {data.menuCategories.map((cat) => (
-        <View key={cat.id} style={styles.section}>
-          <Text style={styles.sectionTitle}>{cat.name}</Text>
-          {(cat.items ?? []).map((item) => (
-            <View key={item.id} style={styles.itemRow}>
-              <View style={styles.itemInfo}>
-                <Text style={styles.itemName}>{item.name}</Text>
-                {item.description ? (
-                  <Text style={styles.itemDesc} numberOfLines={2}>
-                    {item.description}
+    <View style={styles.wrapper}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[styles.content, items.length > 0 && styles.contentWithBar]}
+      >
+        <View style={styles.header}>
+          <Text style={styles.title}>{data.name}</Text>
+          <View style={styles.badgeRow}>
+            {(data.halalStatuses ?? []).map((status) => {
+              const style = badgeStyle(status);
+              return (
+                <View key={status} style={[styles.badge, { backgroundColor: style.bg }]}>
+                  <Text style={[styles.badgeText, { color: style.text }]}>
+                    {HALAL_LABELS[status] ?? status}
                   </Text>
-                ) : null}
-                <Text style={styles.itemPrice}>${Number(item.price).toFixed(2)}</Text>
-              </View>
-              <TouchableOpacity
-                style={[
-                  styles.addBtn,
-                  !item.isAvailable && styles.addBtnDisabled,
-                ]}
-                onPress={() => handleAddItem(item, cat.name)}
-                disabled={!item.isAvailable}
-              >
-                <Text style={styles.addBtnText}>
-                  {item.isAvailable ? 'Add' : 'Unavailable'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ))}
+                </View>
+              );
+            })}
+          </View>
         </View>
-      ))}
-    </ScrollView>
+        {data.description ? (
+          <Text style={styles.desc}>{data.description}</Text>
+        ) : null}
+        <Text style={styles.address}>{data.address}</Text>
+
+        {data.menuCategories.map((cat) => (
+          <View key={cat.id} style={styles.section}>
+            <Text style={styles.sectionTitle}>{cat.name}</Text>
+            {(cat.items ?? []).map((item) => (
+              <View key={item.id} style={styles.itemRow}>
+                <View style={styles.itemInfo}>
+                  <Text style={styles.itemName}>{item.name}</Text>
+                  {item.description ? (
+                    <Text style={styles.itemDesc} numberOfLines={2}>
+                      {item.description}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.itemPrice}>${Number(item.price).toFixed(2)}</Text>
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.addBtn,
+                    !item.isAvailable && styles.addBtnDisabled,
+                  ]}
+                  onPress={() => handleAddItem(item, cat.name)}
+                  disabled={!item.isAvailable}
+                >
+                  <Text style={styles.addBtnText}>
+                    {item.isAvailable ? 'Add' : 'Unavailable'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        ))}
+      </ScrollView>
+
+      <ViewCartBar absolute />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrapper: { flex: 1 },
   container: { flex: 1, backgroundColor: brand.background },
   content: { padding: 16, paddingBottom: 32 },
+  contentWithBar: { paddingBottom: 80 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   empty: { fontSize: 16, color: brand.textSecondary },
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 10 },
   title: { fontSize: 22, fontWeight: '700', color: brand.textPrimary, flex: 1 },
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   badge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
   badgeText: { fontSize: 13, fontWeight: '600' },
   desc: { fontSize: 14, color: brand.textSecondary, marginBottom: 6 },

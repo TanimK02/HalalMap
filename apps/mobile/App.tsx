@@ -1,9 +1,15 @@
+import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import {
+  createBottomTabNavigator,
+  BottomTabBar,
+  type BottomTabBarProps,
+} from '@react-navigation/bottom-tabs';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { CartProvider, useCart } from './src/context/CartContext';
+import { ViewCartBar } from './src/components/ViewCartBar';
 import Login from './src/screens/Login';
 import Register from './src/screens/Register';
 import Home from './src/screens/Home';
@@ -28,6 +34,15 @@ function MainTabs() {
         headerStyle: { backgroundColor: brand.surface },
         headerTintColor: brand.textPrimary,
       }}
+      tabBar={(props: BottomTabBarProps) => (
+        <View>
+          <ViewCartBar
+            currentRouteName={props.state?.routes?.[props.state?.index ?? 0]?.name}
+            absolute={false}
+          />
+          <BottomTabBar {...props} />
+        </View>
+      )}
     >
       <Tab.Screen name="HomeTab" component={Home} options={{ title: 'Halal Map', tabBarLabel: 'Home' }} />
       <Tab.Screen
