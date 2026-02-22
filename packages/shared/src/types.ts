@@ -7,6 +7,9 @@ export type HalalStatus =
   | 'PROCLAIMED_HALAL'
   | 'SOME_HALAL';
 
+/** Restaurant halal statuses are stored and sent as an array (multiple statuses per restaurant). */
+export type HalalStatusList = HalalStatus[];
+
 export type OrderStatus =
   | 'PENDING'
   | 'ACCEPTED'

@@ -40,7 +40,7 @@ async function main() {
         description: 'Certified halal restaurant serving fresh meals.',
         phone: '+1234567890',
         address: '123 Main St, City',
-        halalStatus: 'CERTIFIED_HALAL',
+        halalStatuses: ['CERTIFIED_HALAL'],
         approved: true,
         offersPickup: true,
         offersDelivery: true,

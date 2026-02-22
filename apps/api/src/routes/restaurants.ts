@@ -4,31 +4,42 @@ import { prisma } from '../lib/prisma.js';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth.js';
 import type { HalalStatus } from '@halal-map/shared';
 
+const HALAL_STATUS_VALUES: HalalStatus[] = [
+  'CERTIFIED_HALAL', 'MUSLIM_OWNED', 'HALAL_FRIENDLY', 'PROCLAIMED_HALAL', 'SOME_HALAL',
+];
+
 export const restaurantsRouter = Router();
 
 // Public: list approved restaurants (with optional filters)
 restaurantsRouter.get(
   '/',
   [
-    query('halalStatus').optional().isIn([
-      'CERTIFIED_HALAL', 'MUSLIM_OWNED', 'HALAL_FRIENDLY', 'PROCLAIMED_HALAL', 'SOME_HALAL',
-    ]),
+    query('halalStatuses').optional().trim(),
     query('search').optional().trim(),
   ],
   async (req: Request, res: Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-    const halalStatus = req.query.halalStatus as HalalStatus | undefined;
+    const halalStatusesParam = (req.query.halalStatuses as string)?.split(',').map((s) => s.trim()).filter(Boolean) ?? [];
     const search = req.query.search as string | undefined;
+
+    if (halalStatusesParam.length > 0) {
+      const invalid = halalStatusesParam.filter((s) => !HALAL_STATUS_VALUES.includes(s as HalalStatus));
+      if (invalid.length > 0) {
+        return res.status(400).json({ errors: [{ msg: `Invalid halal statuses: ${invalid.join(', ')}` }] });
+      }
+    }
 
     const where: {
       approved: boolean;
-      halalStatus?: HalalStatus;
+      halalStatuses?: { hasEvery: HalalStatus[] };
       OR?: { name?: { contains: string; mode: 'insensitive' }; description?: { contains: string; mode: 'insensitive' } }[];
     } = {
       approved: true,
     };
-    if (halalStatus) where.halalStatus = halalStatus;
+    if (halalStatusesParam.length > 0) {
+      where.halalStatuses = { hasEvery: halalStatusesParam as HalalStatus[] };
+    }
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
@@ -44,7 +55,7 @@ restaurantsRouter.get(
         description: true,
         phone: true,
         address: true,
-        halalStatus: true,
+        halalStatuses: true,
         certificateExpiresAt: true,
         offersPickup: true,
         offersDelivery: true,
@@ -105,9 +116,9 @@ restaurantsRouter.post(
     body('description').optional().trim(),
     body('phone').optional().trim(),
     body('address').trim().notEmpty(),
-    body('halalStatus').isIn([
-      'CERTIFIED_HALAL', 'MUSLIM_OWNED', 'HALAL_FRIENDLY', 'PROCLAIMED_HALAL', 'SOME_HALAL',
-    ]),
+    body('halalStatuses').isArray(),
+    body('halalStatuses').custom((arr) => Array.isArray(arr) && arr.length >= 1).withMessage('At least one halal status required'),
+    body('halalStatuses.*').isIn(HALAL_STATUS_VALUES),
     body('certificateUrl').optional().trim(),
     body('certificateExpiresAt').optional().isISO8601(),
     body('businessHours').optional().isObject(),
@@ -131,7 +142,7 @@ restaurantsRouter.post(
         description: data.description || null,
         phone: data.phone || null,
         address: data.address,
-        halalStatus: data.halalStatus,
+        halalStatuses: data.halalStatuses as HalalStatus[],
         certificateUrl: data.certificateUrl || null,
         certificateExpiresAt: data.certificateExpiresAt
           ? new Date(data.certificateExpiresAt)
@@ -155,9 +166,9 @@ restaurantsRouter.patch(
     body('description').optional().trim(),
     body('phone').optional().trim(),
     body('address').optional().trim().notEmpty(),
-    body('halalStatus').optional().isIn([
-      'CERTIFIED_HALAL', 'MUSLIM_OWNED', 'HALAL_FRIENDLY', 'PROCLAIMED_HALAL', 'SOME_HALAL',
-    ]),
+    body('halalStatuses').optional().isArray(),
+    body('halalStatuses').optional().custom((arr) => !Array.isArray(arr) || arr.length >= 1).withMessage('If provided, at least one halal status required'),
+    body('halalStatuses.*').optional().isIn(HALAL_STATUS_VALUES),
     body('certificateUrl').optional().trim(),
     body('certificateExpiresAt').optional().isISO8601(),
     body('businessHours').optional().isObject(),
@@ -181,7 +192,7 @@ restaurantsRouter.patch(
         ...(data.description !== undefined && { description: data.description || null }),
         ...(data.phone !== undefined && { phone: data.phone || null }),
         ...(data.address != null && { address: data.address }),
-        ...(data.halalStatus != null && { halalStatus: data.halalStatus }),
+        ...(data.halalStatuses != null && { halalStatuses: data.halalStatuses as HalalStatus[] }),
         ...(data.certificateUrl !== undefined && { certificateUrl: data.certificateUrl || null }),
         ...(data.certificateExpiresAt !== undefined && {
           certificateExpiresAt: data.certificateExpiresAt

@@ -30,7 +30,7 @@ export type Restaurant = {
   description: string | null;
   phone: string | null;
   address: string;
-  halalStatus: string;
+  halalStatuses: string[];
   certificateUrl: string | null;
   certificateExpiresAt: string | null;
   approved: boolean;

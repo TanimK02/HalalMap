@@ -2,12 +2,20 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { api } from '../api';
 
+const HALAL_STATUS_LABELS: Record<string, string> = {
+  CERTIFIED_HALAL: 'Certified Halal',
+  MUSLIM_OWNED: 'Muslim-Owned',
+  HALAL_FRIENDLY: 'Halal-Friendly',
+  PROCLAIMED_HALAL: 'Proclaimed Halal',
+  SOME_HALAL: 'Some Halal',
+};
+
 type Restaurant = {
   id: string;
   name: string;
   description: string | null;
   address: string;
-  halalStatus: string;
+  halalStatuses: string[];
   certificateUrl: string | null;
   certificateExpiresAt: string | null;
   approved: boolean;
@@ -83,7 +91,9 @@ export default function Moderation() {
                 </span>
               </div>
               <p className="text-sm text-text-secondary">{r.description ?? r.address}</p>
-              <p className="text-sm text-text-secondary">Halal: {r.halalStatus}</p>
+              <p className="text-sm text-text-secondary">
+                Halal: {(r.halalStatuses ?? []).map((s) => HALAL_STATUS_LABELS[s] ?? s).join(', ') || '—'}
+              </p>
               <p className="text-sm text-text-secondary">Owner: {r.owner?.email}</p>
               {r.certificateUrl && (
                 <p className="text-sm">

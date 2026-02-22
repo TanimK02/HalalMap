@@ -18,7 +18,7 @@ type Restaurant = {
   name: string;
   description: string | null;
   address: string;
-  halalStatus: string;
+  halalStatuses: string[];
   offersPickup: boolean;
   offersDelivery: boolean;
 };
@@ -28,12 +28,12 @@ export default function Home() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [halalFilter, setHalalFilter] = useState<string>('');
+  const [halalFilters, setHalalFilters] = useState<string[]>([]);
   const [search, setSearch] = useState('');
 
   function load() {
-    const params: { halalStatus?: string; search?: string } = {};
-    if (halalFilter) params.halalStatus = halalFilter;
+    const params: { halalStatuses?: string; search?: string } = {};
+    if (halalFilters.length > 0) params.halalStatuses = halalFilters.join(',');
     if (search.trim()) params.search = search.trim();
     return api
       .get<Restaurant[]>('/restaurants', { params })
@@ -47,7 +47,17 @@ export default function Home() {
 
   useEffect(() => {
     load();
-  }, [halalFilter, search]);
+  }, [halalFilters, search]);
+
+  function toggleHalalFilter(value: string) {
+    if (!value) {
+      setHalalFilters([]);
+      return;
+    }
+    setHalalFilters((prev) =>
+      prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]
+    );
+  }
 
   function onRefresh() {
     setRefreshing(true);
@@ -73,24 +83,27 @@ export default function Home() {
             ...Object.entries(HALAL_LABELS).map(([value, label]) => ({ value, label })),
           ]}
           keyExtractor={(item) => item.value || 'all'}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[
-                styles.filterChip,
-                halalFilter === item.value && styles.filterChipActive,
-              ]}
-              onPress={() => setHalalFilter(item.value)}
-            >
-              <Text
+          renderItem={({ item }) => {
+            const isActive = item.value ? halalFilters.includes(item.value) : halalFilters.length === 0;
+            return (
+              <TouchableOpacity
                 style={[
-                  styles.filterChipText,
-                  halalFilter === item.value && styles.filterChipTextActive,
+                  styles.filterChip,
+                  isActive && styles.filterChipActive,
                 ]}
+                onPress={() => toggleHalalFilter(item.value)}
               >
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          )}
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    isActive && styles.filterChipTextActive,
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          }}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterList}
         />
@@ -107,9 +120,7 @@ export default function Home() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[brand.primary]} />
           }
           contentContainerStyle={styles.list}
-          renderItem={({ item }) => {
-            const style = badgeStyle(item.halalStatus);
-            return (
+          renderItem={({ item }) => (
               <TouchableOpacity
                 style={styles.card}
                 onPress={() =>
@@ -122,10 +133,17 @@ export default function Home() {
               >
                 <View style={styles.cardHeader}>
                   <Text style={styles.cardTitle}>{item.name}</Text>
-                  <View style={[styles.badge, { backgroundColor: style.bg }]}>
-                    <Text style={[styles.badgeText, { color: style.text }]}>
-                      {HALAL_LABELS[item.halalStatus] ?? item.halalStatus}
-                    </Text>
+                  <View style={styles.badgeRow}>
+                    {(item.halalStatuses ?? []).map((status) => {
+                      const style = badgeStyle(status);
+                      return (
+                        <View key={status} style={[styles.badge, { backgroundColor: style.bg }]}>
+                          <Text style={[styles.badgeText, { color: style.text }]}>
+                            {HALAL_LABELS[status] ?? status}
+                          </Text>
+                        </View>
+                      );
+                    })}
                   </View>
                 </View>
                 {item.description ? (
@@ -145,8 +163,7 @@ export default function Home() {
                   )}
                 </View>
               </TouchableOpacity>
-            );
-          }}
+          )}
           ListEmptyComponent={
             <View style={styles.centered}>
               <Text style={styles.empty}>No restaurants found.</Text>
@@ -196,6 +213,7 @@ const styles = StyleSheet.create({
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   cardTitle: { fontSize: 18, fontWeight: '600', color: brand.textPrimary, flex: 1 },
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   badgeText: { fontSize: 12, fontWeight: '600' },
   cardDesc: { fontSize: 14, color: brand.textSecondary, marginBottom: 4 },

@@ -13,7 +13,7 @@ export default function Profile() {
     description: '',
     phone: '',
     address: '',
-    halalStatus: 'CERTIFIED_HALAL' as string,
+    halalStatuses: ['CERTIFIED_HALAL'] as string[],
     certificateUrl: '',
     certificateExpiresAt: '',
     offersPickup: true,
@@ -31,7 +31,7 @@ export default function Profile() {
           description: r2.description ?? '',
           phone: r2.phone ?? '',
           address: r2.address,
-          halalStatus: r2.halalStatus,
+          halalStatuses: Array.isArray(r2.halalStatuses) && r2.halalStatuses.length > 0 ? r2.halalStatuses : ['CERTIFIED_HALAL'],
           certificateUrl: r2.certificateUrl ?? '',
           certificateExpiresAt: r2.certificateExpiresAt
             ? new Date(r2.certificateExpiresAt).toISOString().slice(0, 10)
@@ -46,18 +46,24 @@ export default function Profile() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (form.halalStatuses.length === 0) {
+      setMessage('Select at least one halal status.');
+      return;
+    }
     setSaving(true);
     setMessage('');
     try {
       if (restaurant) {
         await api.patch('/restaurants/me/restaurant', {
           ...form,
+          halalStatuses: form.halalStatuses,
           certificateExpiresAt: form.certificateExpiresAt || undefined,
           certificateUrl: form.certificateUrl || undefined,
         });
       } else {
         await api.post('/restaurants/me/restaurant', {
           ...form,
+          halalStatuses: form.halalStatuses,
           certificateExpiresAt: form.certificateExpiresAt || undefined,
           certificateUrl: form.certificateUrl || undefined,
         });
@@ -127,18 +133,27 @@ export default function Profile() {
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">Halal status</label>
-          <select
-            value={form.halalStatus}
-            onChange={(e) => setForm((f) => ({ ...f, halalStatus: e.target.value }))}
-            className="w-full rounded border border-gray-300 px-3 py-2"
-          >
+          <label className="mb-1 block text-sm font-medium">Halal status (select all that apply)</label>
+          <div className="flex flex-wrap gap-3">
             {Object.entries(HALAL_STATUS_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
+              <label key={value} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={form.halalStatuses.includes(value)}
+                  onChange={(e) => {
+                    setForm((f) => ({
+                      ...f,
+                      halalStatuses: e.target.checked
+                        ? [...f.halalStatuses, value]
+                        : f.halalStatuses.filter((s) => s !== value),
+                    }));
+                  }}
+                  className="rounded border-gray-300"
+                />
+                <span className="text-sm">{label}</span>
+              </label>
             ))}
-          </select>
+          </div>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">Certificate URL (optional)</label>

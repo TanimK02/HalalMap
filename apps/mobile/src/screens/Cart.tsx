@@ -15,6 +15,8 @@ import { api } from '../api';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { brand } from '../theme';
+import { AddressForm } from '../components/AddressForm';
+import type { Address } from '../types/address';
 
 export default function Cart() {
   const navigation = useNavigation();
@@ -22,24 +24,28 @@ export default function Cart() {
   const { token } = useAuth();
   const [deliveryType, setDeliveryType] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
   const [deliveryAddressId, setDeliveryAddressId] = useState<string | null>(null);
-  const [addresses, setAddresses] = useState<{ id: string; label: string | null; street: string; city: string; postalCode: string; isDefault: boolean }[]>([]);
+  const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingAddresses, setLoadingAddresses] = useState(false);
+  const [showAddAddressForm, setShowAddAddressForm] = useState(false);
+  const [showAddressList, setShowAddressList] = useState(false);
 
   React.useEffect(() => {
     if (deliveryType === 'DELIVERY' && token) {
       setLoadingAddresses(true);
       api
-        .get('/users/addresses')
+        .get<Address[]>('/users/addresses')
         .then((r) => {
           setAddresses(r.data);
-          const defaultAddr = r.data.find((a: { isDefault: boolean }) => a.isDefault) ?? r.data[0];
+          const defaultAddr = r.data.find((a) => a.isDefault) ?? r.data[0];
           if (defaultAddr) setDeliveryAddressId(defaultAddr.id);
         })
         .catch(() => setAddresses([]))
         .finally(() => setLoadingAddresses(false));
     } else {
       setDeliveryAddressId(null);
+      setShowAddressList(false);
+      setShowAddAddressForm(false);
     }
   }, [deliveryType, token]);
 
@@ -137,23 +143,78 @@ export default function Cart() {
           <Text style={styles.sectionTitle}>Delivery address</Text>
           {loadingAddresses ? (
             <ActivityIndicator color={brand.primary} />
+          ) : showAddAddressForm ? (
+            <AddressForm
+              onSaved={(addr) => {
+                setAddresses((prev) => [...prev, addr]);
+                setDeliveryAddressId(addr.id);
+                setShowAddAddressForm(false);
+                setShowAddressList(false);
+              }}
+              onCancel={() => setShowAddAddressForm(false)}
+              submitLabel="Use this address"
+            />
           ) : addresses.length === 0 ? (
-            <Text style={styles.hint}>Add an address in Profile.</Text>
-          ) : (
-            addresses.map((addr) => (
+            <TouchableOpacity
+              style={styles.addAddressBtn}
+              onPress={() => setShowAddAddressForm(true)}
+            >
+              <Text style={styles.addAddressBtnText}>Add delivery address</Text>
+            </TouchableOpacity>
+          ) : showAddressList ? (
+            <>
+              {addresses.map((addr) => (
+                <TouchableOpacity
+                  key={addr.id}
+                  style={[styles.addressRow, deliveryAddressId === addr.id && styles.addressRowActive]}
+                  onPress={() => {
+                    setDeliveryAddressId(addr.id);
+                    setShowAddressList(false);
+                  }}
+                >
+                  <Text style={styles.addressText}>
+                    {addr.label ?? addr.street}, {addr.city} {addr.postalCode}
+                  </Text>
+                  {addr.isDefault && (
+                    <Text style={styles.defaultBadge}>Default</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
               <TouchableOpacity
-                key={addr.id}
-                style={[styles.addressRow, deliveryAddressId === addr.id && styles.addressRowActive]}
-                onPress={() => setDeliveryAddressId(addr.id)}
+                style={styles.addNewAddressBtn}
+                onPress={() => setShowAddAddressForm(true)}
               >
-                <Text style={styles.addressText}>
-                  {addr.label ?? addr.street}, {addr.city} {addr.postalCode}
-                </Text>
-                {addr.isDefault && (
-                  <Text style={styles.defaultBadge}>Default</Text>
-                )}
+                <Text style={styles.addNewAddressBtnText}>+ Add new address</Text>
               </TouchableOpacity>
-            ))
+              <TouchableOpacity
+                style={styles.doneBtn}
+                onPress={() => setShowAddressList(false)}
+              >
+                <Text style={styles.doneBtnText}>Done</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              {(() => {
+                const selected = addresses.find((a) => a.id === deliveryAddressId) ?? addresses[0];
+                return selected ? (
+                  <View style={styles.addressRow}>
+                    <Text style={styles.addressText}>
+                      {selected.label ?? selected.street}, {selected.city} {selected.postalCode}
+                    </Text>
+                    {selected.isDefault && (
+                      <Text style={styles.defaultBadge}>Default</Text>
+                    )}
+                  </View>
+                ) : null;
+              })()}
+              <TouchableOpacity
+                style={styles.changeAddressBtn}
+                onPress={() => setShowAddressList(true)}
+              >
+                <Text style={styles.changeAddressBtnText}>Change address</Text>
+              </TouchableOpacity>
+            </>
           )}
         </View>
       )}
@@ -211,7 +272,40 @@ const styles = StyleSheet.create({
   radioActive: { backgroundColor: brand.primary, borderColor: brand.primary },
   radioText: { fontSize: 14, color: brand.textPrimary },
   radioTextActive: { fontSize: 14, color: '#fff', fontWeight: '600' },
-  hint: { fontSize: 14, color: brand.textSecondary },
+  addAddressBtn: {
+    padding: 12,
+    borderWidth: 1,
+    borderColor: brand.primary,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  addAddressBtnText: { color: brand.primary, fontWeight: '600' },
+  addNewAddressBtn: {
+    padding: 12,
+    borderWidth: 1,
+    borderColor: brand.primary,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  addNewAddressBtnText: { color: brand.primary, fontWeight: '600' },
+  doneBtn: {
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    alignItems: 'center',
+  },
+  doneBtnText: { color: brand.textPrimary, fontWeight: '600' },
+  changeAddressBtn: {
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  changeAddressBtnText: { color: brand.textPrimary, fontWeight: '600' },
   addressRow: {
     padding: 12,
     borderRadius: 8,
