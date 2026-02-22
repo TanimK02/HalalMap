@@ -1,4 +1,5 @@
-import { View } from 'react-native';
+import { useEffect } from 'react';
+import { View, Linking } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -7,7 +8,7 @@ import {
   BottomTabBar,
   type BottomTabBarProps,
 } from '@react-navigation/bottom-tabs';
-import { StripeProvider } from '@stripe/stripe-react-native';
+import { StripeProvider, useStripe } from '@stripe/stripe-react-native';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { CartProvider, useCart } from './src/context/CartContext';
 import { ViewCartBar } from './src/components/ViewCartBar';
@@ -130,15 +131,28 @@ function AppNavigator() {
 
 const stripePublishableKey = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '';
 
+function StripeRedirectHandler({ children }: { children: React.ReactNode }) {
+  const { handleURLCallback } = useStripe();
+  useEffect(() => {
+    const sub = Linking.addEventListener('url', (event) => {
+      handleURLCallback(event.url);
+    });
+    return () => sub.remove();
+  }, [handleURLCallback]);
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <StripeProvider publishableKey={stripePublishableKey}>
-      <AuthProvider>
-        <CartProvider>
-          <StatusBar style="dark" />
-          <AppNavigator />
-        </CartProvider>
-      </AuthProvider>
+      <StripeRedirectHandler>
+        <AuthProvider>
+          <CartProvider>
+            <StatusBar style="dark" />
+            <AppNavigator />
+          </CartProvider>
+        </AuthProvider>
+      </StripeRedirectHandler>
     </StripeProvider>
   );
 }

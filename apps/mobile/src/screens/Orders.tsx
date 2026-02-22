@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { brand } from '../theme';
 
@@ -23,18 +23,26 @@ const STATUS_LABELS: Record<string, string> = {
   CANCELLED: 'Cancelled',
 };
 
+function fetchOrders() {
+  return api
+    .get<Order[]>('/orders')
+    .then((r) => r.data)
+    .catch(() => [] as Order[]);
+}
+
 export default function Orders() {
   const navigation = useNavigation();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    api
-      .get<Order[]>('/orders')
-      .then((r) => setOrders(r.data))
-      .catch(() => setOrders([]))
-      .finally(() => setLoading(false));
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      fetchOrders()
+        .then((data) => setOrders(data))
+        .finally(() => setLoading(false));
+    }, [])
+  );
 
   if (loading) {
     return (

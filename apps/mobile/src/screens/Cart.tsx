@@ -105,6 +105,7 @@ export default function Cart() {
       const { error: initError } = await initPaymentSheet({
         paymentIntentClientSecret: clientSecret,
         merchantDisplayName: restaurantName ?? 'Halal Map',
+        returnURL: 'halalmap://stripe-redirect',
       });
       if (initError) {
         Alert.alert('Payment setup failed', initError.message ?? 'Could not open payment form.');
@@ -121,7 +122,17 @@ export default function Cart() {
         return;
       }
 
-      const order = await fetchOrderByPaymentIntentId(paymentIntentId);
+      // Create order from payment intent (works when webhook has not run, e.g. local dev)
+      let order: { id: string } | null = null;
+      try {
+        const { data: orderData } = await api.post<{ id: string }>('/orders/from-payment-intent', {
+          paymentIntentId,
+        });
+        order = orderData;
+      } catch {
+        // Webhook may have created it; fall back to polling
+        order = await fetchOrderByPaymentIntentId(paymentIntentId);
+      }
       if (!order) {
         Alert.alert(
           'Order is being created',

@@ -147,6 +147,92 @@ ordersRouter.post(
   }
 );
 
+// Parse items from PaymentIntent metadata (same as webhook)
+function parseItemsFromPaymentMeta(metadata: Record<string, string>): { menuItemId: string; quantity: number; priceAtOrder: string }[] {
+  let itemsJson = metadata.items ?? '';
+  let i = 0;
+  while (metadata[`items${i}`]) {
+    itemsJson += metadata[`items${i}`];
+    i++;
+  }
+  if (!itemsJson) return [];
+  try {
+    return JSON.parse(itemsJson) as { menuItemId: string; quantity: number; priceAtOrder: string }[];
+  } catch {
+    return [];
+  }
+}
+
+// Customer: create order from PaymentIntent after payment succeeds (when webhook has not run yet, e.g. local dev)
+ordersRouter.post(
+  '/from-payment-intent',
+  requireAuth,
+  [body('paymentIntentId').trim().notEmpty()],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (!stripe) return res.status(503).json({ error: 'Stripe not configured' });
+
+    const paymentIntentId = req.body.paymentIntentId as string;
+    let paymentIntent: Stripe.PaymentIntent;
+    try {
+      paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    } catch {
+      return res.status(400).json({ error: 'Invalid payment intent' });
+    }
+    if (paymentIntent.status !== 'succeeded') {
+      return res.status(400).json({ error: 'Payment has not succeeded' });
+    }
+    const meta = paymentIntent.metadata ?? {};
+    if (meta.userId !== req.userId!) {
+      return res.status(403).json({ error: 'Payment intent does not belong to this user' });
+    }
+
+    const existing = await prisma.order.findFirst({
+      where: { stripePaymentIntentId: paymentIntentId, userId: req.userId! },
+      include: { restaurant: true, items: { include: { menuItem: true } }, deliveryAddress: true },
+    });
+    if (existing) {
+      return res.json(existing);
+    }
+
+    const userId = meta.userId;
+    const restaurantId = meta.restaurantId;
+    const deliveryType = (meta.deliveryType as 'PICKUP' | 'DELIVERY') || 'PICKUP';
+    const deliveryAddressIdRaw = meta.deliveryAddressId;
+    const deliveryAddressId =
+      deliveryAddressIdRaw && deliveryAddressIdRaw !== '' ? deliveryAddressIdRaw : null;
+    const totalPriceStr = meta.totalPrice;
+    const itemsMeta = parseItemsFromPaymentMeta(meta);
+    if (!userId || !restaurantId || totalPriceStr === undefined || itemsMeta.length === 0) {
+      return res.status(400).json({ error: 'Invalid payment intent metadata' });
+    }
+
+    const totalPrice = new Decimal(totalPriceStr);
+    const orderItems = itemsMeta.map((item) => ({
+      menuItemId: item.menuItemId,
+      quantity: item.quantity,
+      priceAtOrder: new Decimal(item.priceAtOrder),
+    }));
+
+    const order = await prisma.order.create({
+      data: {
+        userId,
+        restaurantId,
+        status: 'PENDING',
+        totalPrice,
+        deliveryType,
+        deliveryAddressId,
+        stripePaymentIntentId: paymentIntentId,
+        paymentConfirmedAt: new Date(),
+        items: { create: orderItems },
+      },
+      include: { restaurant: true, items: { include: { menuItem: true } }, deliveryAddress: true },
+    });
+    return res.status(201).json(order);
+  }
+);
+
 // Confirm payment (idempotent) - call after client confirms PaymentIntent
 ordersRouter.post(
   '/:orderId/confirm-payment',
