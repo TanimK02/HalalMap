@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
+import { useStripe } from '@stripe/stripe-react-native';
 import { api } from '../api';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
@@ -20,6 +21,7 @@ import type { Address } from '../types/address';
 
 export default function Cart() {
   const navigation = useNavigation();
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const { items, restaurantId, restaurantName, total, removeItem, clearCart } = useCart();
   const { token } = useAuth();
   const [deliveryType, setDeliveryType] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
@@ -49,6 +51,27 @@ export default function Cart() {
     }
   }, [deliveryType, token]);
 
+  async function fetchOrderByPaymentIntentId(
+    paymentIntentId: string,
+    retries = 2
+  ): Promise<{ id: string } | null> {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const { data } = await api.get<{ id: string }>(
+          `/orders/by-payment-intent/${paymentIntentId}`
+        );
+        return data;
+      } catch (e) {
+        if (axios.isAxiosError(e) && e.response?.status === 404 && attempt < retries) {
+          await new Promise((r) => setTimeout(r, 800));
+          continue;
+        }
+        return null;
+      }
+    }
+    return null;
+  }
+
   async function handleCheckout() {
     if (!restaurantId || items.length === 0) return;
     if (deliveryType === 'DELIVERY' && !deliveryAddressId) {
@@ -63,10 +86,54 @@ export default function Cart() {
         deliveryAddressId: deliveryType === 'DELIVERY' ? deliveryAddressId : undefined,
         items: items.map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity })),
       };
-      const { data } = await api.post('/orders', payload);
+      const { data } = await api.post<
+        | { order: { id: string }; clientSecret: null }
+        | { clientSecret: string; paymentIntentId: string }
+      >('/orders', payload);
+
+      if ('order' in data && data.clientSecret === null) {
+        clearCart();
+        (navigation as { navigate: (s: string, p: object) => void }).navigate('OrderDetail', {
+          orderId: data.order.id,
+        });
+        setLoading(false);
+        return;
+      }
+
+      const { clientSecret, paymentIntentId } = data;
+
+      const { error: initError } = await initPaymentSheet({
+        paymentIntentClientSecret: clientSecret,
+        merchantDisplayName: restaurantName ?? 'Halal Map',
+      });
+      if (initError) {
+        Alert.alert('Payment setup failed', initError.message ?? 'Could not open payment form.');
+        setLoading(false);
+        return;
+      }
+
+      const { error: presentError } = await presentPaymentSheet();
+      if (presentError) {
+        if (presentError.code !== 'Canceled') {
+          Alert.alert('Payment failed', presentError.message ?? 'Payment was not completed.');
+        }
+        setLoading(false);
+        return;
+      }
+
+      const order = await fetchOrderByPaymentIntentId(paymentIntentId);
+      if (!order) {
+        Alert.alert(
+          'Order is being created',
+          'Check My Orders in a moment. Your payment was successful.'
+        );
+        clearCart();
+        setLoading(false);
+        return;
+      }
       clearCart();
       (navigation as { navigate: (s: string, p: object) => void }).navigate('OrderDetail', {
-        orderId: data.order.id,
+        orderId: order.id,
       });
     } catch (err) {
       const msg =

@@ -12,7 +12,7 @@ const stripe = process.env.STRIPE_SECRET_KEY
 
 export const ordersRouter = Router();
 
-// Customer: create order (checkout) -> creates order + PaymentIntent, returns clientSecret
+// Customer: checkout -> when Stripe: create PaymentIntent only (order created in webhook); when no Stripe: create order, return order
 ordersRouter.post(
   '/',
   requireAuth,
@@ -82,6 +82,42 @@ ordersRouter.post(
 
     const totalPrice = totalCents / 100;
 
+    if (stripe) {
+      const itemsPayload = orderItems.map((i) => ({
+        menuItemId: i.menuItemId,
+        quantity: i.quantity,
+        priceAtOrder: String(i.priceAtOrder),
+      }));
+      let itemsJson = JSON.stringify(itemsPayload);
+      const metadata: Record<string, string> = {
+        userId: req.userId!,
+        restaurantId: restaurant.id,
+        deliveryType,
+        deliveryAddressId: deliveryType === 'DELIVERY' && deliveryAddressId ? deliveryAddressId : '',
+        totalPrice: String(totalPrice),
+      };
+      const maxMetaVal = 500;
+      if (itemsJson.length <= maxMetaVal) {
+        metadata.items = itemsJson;
+      } else {
+        for (let i = 0; i < itemsJson.length; i += maxMetaVal) {
+          metadata[`items${Math.floor(i / maxMetaVal)}`] = itemsJson.slice(i, i + maxMetaVal);
+        }
+      }
+
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: totalCents,
+        currency: 'usd',
+        metadata,
+        automatic_payment_methods: { enabled: true },
+      });
+
+      return res.status(201).json({
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+      });
+    }
+
     const order = await prisma.order.create({
       data: {
         userId: req.userId!,
@@ -97,21 +133,6 @@ ordersRouter.post(
       include: { items: true },
     });
 
-    let clientSecret: string | null = null;
-    if (stripe) {
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: totalCents,
-        currency: 'usd',
-        metadata: { orderId: order.id },
-        automatic_payment_methods: { enabled: true },
-      });
-      await prisma.order.update({
-        where: { id: order.id },
-        data: { stripePaymentIntentId: paymentIntent.id },
-      });
-      clientSecret = paymentIntent.client_secret;
-    }
-
     return res.status(201).json({
       order: {
         id: order.id,
@@ -121,7 +142,7 @@ ordersRouter.post(
         items: order.items,
         createdAt: order.createdAt,
       },
-      clientSecret,
+      clientSecret: null,
     });
   }
 );
@@ -137,9 +158,25 @@ ordersRouter.post(
     });
     if (!order) return res.status(404).json({ error: 'Order not found' });
     if (order.status !== 'PENDING') {
-      return res.json(order);
+      const existing = await prisma.order.findUnique({
+        where: { id: order.id },
+        include: { items: { include: { menuItem: true } }, restaurant: true },
+      });
+      return res.json(existing);
     }
-    // Optionally verify with Stripe that payment succeeded; for MVP we trust client
+    if (order.stripePaymentIntentId && stripe) {
+      try {
+        const paymentIntent = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId);
+        if (paymentIntent.status === 'succeeded' && !order.paymentConfirmedAt) {
+          await prisma.order.update({
+            where: { id: order.id },
+            data: { paymentConfirmedAt: new Date() },
+          });
+        }
+      } catch {
+        // Ignore Stripe errors; webhook remains source of truth
+      }
+    }
     const updated = await prisma.order.findUnique({
       where: { id: order.id },
       include: { items: { include: { menuItem: true } }, restaurant: true },
@@ -163,6 +200,7 @@ ordersRouter.get(
     const orders = await prisma.order.findMany({
       where: {
         restaurantId: restaurant.id,
+        paymentConfirmedAt: { not: null },
         ...(status && { status }),
       },
       include: {
@@ -219,6 +257,29 @@ ordersRouter.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   });
   return res.json(orders);
 });
+
+// Customer: get order by PaymentIntent id (after payment, before webhook may have run)
+ordersRouter.get(
+  '/by-payment-intent/:paymentIntentId',
+  requireAuth,
+  param('paymentIntentId').isString(),
+  async (req: AuthRequest, res: Response) => {
+    const paymentIntentId = req.params.paymentIntentId as string;
+    const order = await prisma.order.findFirst({
+      where: {
+        stripePaymentIntentId: paymentIntentId,
+        userId: req.userId!,
+      },
+      include: {
+        restaurant: true,
+        items: { include: { menuItem: true } },
+        deliveryAddress: true,
+      },
+    });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    return res.json(order);
+  }
+);
 
 // Customer: single order
 ordersRouter.get('/:id', requireAuth, param('id').isString(), async (req: AuthRequest, res: Response) => {

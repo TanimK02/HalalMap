@@ -124,6 +124,7 @@ model Order {
   deliveryAddressId      String?
   deliveryAddress        Address?      @relation("DeliveryAddress", fields: [deliveryAddressId], references: [id])
   stripePaymentIntentId  String?       @unique
+  paymentConfirmedAt     DateTime?
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
 

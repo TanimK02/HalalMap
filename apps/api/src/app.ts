@@ -6,6 +6,7 @@ import { usersRouter } from './routes/users.js';
 import { restaurantsRouter } from './routes/restaurants.js';
 import { ordersRouter } from './routes/orders.js';
 import { adminRouter } from './routes/admin.js';
+import { webhooksRouter } from './routes/webhooks.js';
 
 export const app = express();
 
@@ -30,6 +31,8 @@ app.use(
     credentials: true,
   })
 );
+// Stripe webhook needs raw body for signature verification (must be before express.json())
+app.use('/webhooks', express.raw({ type: 'application/json' }), webhooksRouter);
 app.use(express.json());
 
 const limiter = rateLimit({

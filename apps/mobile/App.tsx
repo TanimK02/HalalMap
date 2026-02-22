@@ -7,6 +7,7 @@ import {
   BottomTabBar,
   type BottomTabBarProps,
 } from '@react-navigation/bottom-tabs';
+import { StripeProvider } from '@stripe/stripe-react-native';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { CartProvider, useCart } from './src/context/CartContext';
 import { ViewCartBar } from './src/components/ViewCartBar';
@@ -127,13 +128,17 @@ function AppNavigator() {
   );
 }
 
+const stripePublishableKey = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '';
+
 export default function App() {
   return (
-    <AuthProvider>
-      <CartProvider>
-        <StatusBar style="dark" />
-        <AppNavigator />
-      </CartProvider>
-    </AuthProvider>
+    <StripeProvider publishableKey={stripePublishableKey}>
+      <AuthProvider>
+        <CartProvider>
+          <StatusBar style="dark" />
+          <AppNavigator />
+        </CartProvider>
+      </AuthProvider>
+    </StripeProvider>
   );
 }
