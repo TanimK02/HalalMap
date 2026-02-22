@@ -18,6 +18,7 @@ import Cart from './src/screens/Cart';
 import Orders from './src/screens/Orders';
 import OrderDetail from './src/screens/OrderDetail';
 import Profile from './src/screens/Profile';
+import { Ionicons } from '@expo/vector-icons';
 import { brand } from './src/theme';
 
 const Stack = createNativeStackNavigator();
@@ -44,18 +45,51 @@ function MainTabs() {
         </View>
       )}
     >
-      <Tab.Screen name="HomeTab" component={Home} options={{ title: 'Halal Map', tabBarLabel: 'Home' }} />
+      <Tab.Screen
+        name="HomeTab"
+        component={Home}
+        options={{
+          title: 'Halal Map',
+          tabBarLabel: 'Home',
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons name={focused ? 'home' : 'home-outline'} size={size} color={color} />
+          ),
+        }}
+      />
       <Tab.Screen
         name="CartTab"
         component={Cart}
         options={{
           title: 'Cart',
           tabBarLabel: 'Cart',
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons name={focused ? 'cart' : 'cart-outline'} size={size} color={color} />
+          ),
           tabBarBadge: items.length > 0 ? items.length : undefined,
         }}
       />
-      <Tab.Screen name="OrdersTab" component={Orders} options={{ title: 'Orders', tabBarLabel: 'Orders' }} />
-      <Tab.Screen name="ProfileTab" component={Profile} options={{ title: 'Profile', tabBarLabel: 'Profile' }} />
+      <Tab.Screen
+        name="OrdersTab"
+        component={Orders}
+        options={{
+          title: 'Orders',
+          tabBarLabel: 'Orders',
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons name={focused ? 'receipt' : 'receipt-outline'} size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="ProfileTab"
+        component={Profile}
+        options={{
+          title: 'Profile',
+          tabBarLabel: 'Profile',
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={color} />
+          ),
+        }}
+      />
     </TabNav>
   );
 }
