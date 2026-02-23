@@ -97,18 +97,25 @@ describe('POST /orders/', () => {
       name: 'Item',
       price: 10,
       isAvailable: true,
+      availableForPickup: true,
+      availableForDelivery: true,
     };
     (prisma.restaurant.findFirst as jest.Mock).mockResolvedValue({
       id: 'r1',
       approved: true,
       offersPickup: true,
       offersDelivery: false,
+      pickupFeeType: null,
+      pickupFeeValue: null,
+      deliveryFeeType: null,
+      deliveryFeeValue: null,
       menuCategories: [{ items: [mockMenuItem] }],
     });
     (prisma.order.create as jest.Mock).mockResolvedValue({
       id: 'order-1',
       status: 'PENDING',
       totalPrice: new Decimal(10),
+      feeCents: 0,
       deliveryType: 'PICKUP',
       deliveryAddressId: null,
       items: [{ menuItemId: 'm1', quantity: 1, priceAtOrder: new Decimal(10) }],

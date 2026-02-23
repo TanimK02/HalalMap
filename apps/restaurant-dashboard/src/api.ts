@@ -37,8 +37,16 @@ export type Restaurant = {
   businessHours: Record<string, unknown> | null;
   offersPickup: boolean;
   offersDelivery: boolean;
+  pickupFeeType: string | null;
+  pickupFeeValue: number | null;
+  deliveryFeeType: string | null;
+  deliveryFeeValue: number | null;
   menuCategories?: MenuCategory[];
 };
+
+export type FeeStructure =
+  | { type: 'flat'; valueCents: number }
+  | { type: 'percent'; valuePercent: number };
 
 export type MenuCategory = {
   id: string;
@@ -54,6 +62,8 @@ export type MenuItem = {
   price: number;
   imageUrl: string | null;
   isAvailable: boolean;
+  availableForPickup: boolean;
+  availableForDelivery: boolean;
   sortOrder: number;
 };
 

@@ -18,6 +18,10 @@ export default function Profile() {
     certificateExpiresAt: '',
     offersPickup: true,
     offersDelivery: false,
+    pickupFeeType: '' as '' | 'FLAT' | 'PERCENT',
+    pickupFeeValue: 0,
+    deliveryFeeType: '' as '' | 'FLAT' | 'PERCENT',
+    deliveryFeeValue: 0,
   });
 
   useEffect(() => {
@@ -38,6 +42,10 @@ export default function Profile() {
             : '',
           offersPickup: r2.offersPickup,
           offersDelivery: r2.offersDelivery,
+          pickupFeeType: (r2.pickupFeeType as '' | 'FLAT' | 'PERCENT') ?? '',
+          pickupFeeValue: r2.pickupFeeValue ?? 0,
+          deliveryFeeType: (r2.deliveryFeeType as '' | 'FLAT' | 'PERCENT') ?? '',
+          deliveryFeeValue: r2.deliveryFeeValue ?? 0,
         });
       })
       .catch(() => setRestaurant(null))
@@ -59,6 +67,10 @@ export default function Profile() {
           halalStatuses: form.halalStatuses,
           certificateExpiresAt: form.certificateExpiresAt || undefined,
           certificateUrl: form.certificateUrl || undefined,
+          pickupFeeType: form.pickupFeeType || null,
+          pickupFeeValue: form.pickupFeeType ? form.pickupFeeValue : null,
+          deliveryFeeType: form.deliveryFeeType || null,
+          deliveryFeeValue: form.deliveryFeeType ? form.deliveryFeeValue : null,
         });
       } else {
         await api.post('/restaurants/me/restaurant', {
@@ -192,6 +204,60 @@ export default function Profile() {
             <span className="text-sm">Offers delivery</span>
           </label>
         </div>
+
+        <div className="rounded border border-gray-200 bg-surface p-4 space-y-4">
+          <h2 className="font-medium text-text-primary">Fee overrides (optional)</h2>
+          <p className="text-sm text-text-secondary">Leave as &quot;Use platform default&quot; to use app-wide defaults. Set a flat amount (cents) or percentage to override for your restaurant.</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium">Pickup fee</label>
+              <select
+                value={form.pickupFeeType}
+                onChange={(e) => setForm((f) => ({ ...f, pickupFeeType: e.target.value as '' | 'FLAT' | 'PERCENT' }))}
+                className="w-full rounded border border-gray-300 px-3 py-2"
+              >
+                <option value="">Use platform default</option>
+                <option value="FLAT">Flat amount (cents)</option>
+                <option value="PERCENT">Percentage</option>
+              </select>
+              {(form.pickupFeeType === 'FLAT' || form.pickupFeeType === 'PERCENT') && (
+                <input
+                  type="number"
+                  min="0"
+                  step={form.pickupFeeType === 'PERCENT' ? 1 : 1}
+                  value={form.pickupFeeValue}
+                  onChange={(e) => setForm((f) => ({ ...f, pickupFeeValue: Number(e.target.value) || 0 }))}
+                  placeholder={form.pickupFeeType === 'FLAT' ? 'e.g. 299 for $2.99' : 'e.g. 10 for 10%'}
+                  className="mt-2 w-full rounded border border-gray-300 px-3 py-2"
+                />
+              )}
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">Delivery fee</label>
+              <select
+                value={form.deliveryFeeType}
+                onChange={(e) => setForm((f) => ({ ...f, deliveryFeeType: e.target.value as '' | 'FLAT' | 'PERCENT' }))}
+                className="w-full rounded border border-gray-300 px-3 py-2"
+              >
+                <option value="">Use platform default</option>
+                <option value="FLAT">Flat amount (cents)</option>
+                <option value="PERCENT">Percentage</option>
+              </select>
+              {(form.deliveryFeeType === 'FLAT' || form.deliveryFeeType === 'PERCENT') && (
+                <input
+                  type="number"
+                  min="0"
+                  step={form.deliveryFeeType === 'PERCENT' ? 1 : 1}
+                  value={form.deliveryFeeValue}
+                  onChange={(e) => setForm((f) => ({ ...f, deliveryFeeValue: Number(e.target.value) || 0 }))}
+                  placeholder={form.deliveryFeeType === 'FLAT' ? 'e.g. 299 for $2.99' : 'e.g. 10 for 10%'}
+                  className="mt-2 w-full rounded border border-gray-300 px-3 py-2"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+
         <button
           type="submit"
           disabled={saving}

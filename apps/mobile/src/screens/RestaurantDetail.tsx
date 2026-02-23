@@ -18,7 +18,16 @@ type MenuCategory = {
   id: string;
   name: string;
   sortOrder: number;
-  items: { id: string; name: string; description: string | null; price: number; imageUrl: string | null; isAvailable: boolean }[];
+  items: {
+    id: string;
+    name: string;
+    description: string | null;
+    price: number;
+    imageUrl: string | null;
+    isAvailable: boolean;
+    availableForPickup?: boolean;
+    availableForDelivery?: boolean;
+  }[];
 };
 
 type RestaurantDetailData = {
@@ -39,6 +48,7 @@ export default function RestaurantDetail() {
   const { addItem, items, restaurantId: cartRestaurantId } = useCart();
   const [data, setData] = useState<RestaurantDetailData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deliveryType, setDeliveryType] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
 
   useEffect(() => {
     if (!restaurantId) return;
@@ -49,12 +59,28 @@ export default function RestaurantDetail() {
       .finally(() => setLoading(false));
   }, [restaurantId]);
 
+  function canAddForDeliveryType(
+    item: { availableForPickup?: boolean; availableForDelivery?: boolean }
+  ): boolean {
+    const pickup = item.availableForPickup !== false;
+    const delivery = item.availableForDelivery !== false;
+    return deliveryType === 'PICKUP' ? pickup : delivery;
+  }
+
   function handleAddItem(
-    item: { id: string; name: string; price: number; isAvailable: boolean },
+    item: {
+      id: string;
+      name: string;
+      price: number;
+      isAvailable: boolean;
+      availableForPickup?: boolean;
+      availableForDelivery?: boolean;
+    },
     categoryName: string
   ) {
     if (!data) return;
     if (!item.isAvailable) return;
+    if (!canAddForDeliveryType(item)) return;
     if (cartRestaurantId && cartRestaurantId !== data.id) {
       Alert.alert(
         'Different restaurant',
@@ -117,34 +143,65 @@ export default function RestaurantDetail() {
         ) : null}
         <Text style={styles.address}>{data.address}</Text>
 
+        <View style={styles.deliveryTypeRow}>
+          <Text style={styles.deliveryTypeLabel}>Order for:</Text>
+          <View style={styles.deliveryTypeButtons}>
+            <TouchableOpacity
+              style={[styles.deliveryTypeBtn, deliveryType === 'PICKUP' && styles.deliveryTypeBtnActive]}
+              onPress={() => setDeliveryType('PICKUP')}
+            >
+              <Text style={[styles.deliveryTypeBtnText, deliveryType === 'PICKUP' && styles.deliveryTypeBtnTextActive]}>
+                Pickup
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.deliveryTypeBtn, deliveryType === 'DELIVERY' && styles.deliveryTypeBtnActive]}
+              onPress={() => setDeliveryType('DELIVERY')}
+            >
+              <Text style={[styles.deliveryTypeBtnText, deliveryType === 'DELIVERY' && styles.deliveryTypeBtnTextActive]}>
+                Delivery
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {data.menuCategories.map((cat) => (
           <View key={cat.id} style={styles.section}>
             <Text style={styles.sectionTitle}>{cat.name}</Text>
-            {(cat.items ?? []).map((item) => (
-              <View key={item.id} style={styles.itemRow}>
-                <View style={styles.itemInfo}>
-                  <Text style={styles.itemName}>{item.name}</Text>
-                  {item.description ? (
-                    <Text style={styles.itemDesc} numberOfLines={2}>
-                      {item.description}
+            {(cat.items ?? []).map((item) => {
+              const available = item.isAvailable && canAddForDeliveryType(item);
+              const pickupOnly = item.availableForPickup && item.availableForDelivery === false;
+              const deliveryOnly = item.availableForDelivery && item.availableForPickup === false;
+              const availabilityNote = pickupOnly ? 'Pickup only' : deliveryOnly ? 'Delivery only' : null;
+              return (
+                <View key={item.id} style={styles.itemRow}>
+                  <View style={styles.itemInfo}>
+                    <Text style={styles.itemName}>{item.name}</Text>
+                    {item.description ? (
+                      <Text style={styles.itemDesc} numberOfLines={2}>
+                        {item.description}
+                      </Text>
+                    ) : null}
+                    {availabilityNote ? (
+                      <Text style={styles.availabilityNote}>{availabilityNote}</Text>
+                    ) : null}
+                    <Text style={styles.itemPrice}>${Number(item.price).toFixed(2)}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.addBtn,
+                      (!item.isAvailable || !available) && styles.addBtnDisabled,
+                    ]}
+                    onPress={() => handleAddItem(item, cat.name)}
+                    disabled={!item.isAvailable || !available}
+                  >
+                    <Text style={styles.addBtnText}>
+                      {!item.isAvailable ? 'Unavailable' : available ? 'Add' : 'Not available'}
                     </Text>
-                  ) : null}
-                  <Text style={styles.itemPrice}>${Number(item.price).toFixed(2)}</Text>
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  style={[
-                    styles.addBtn,
-                    !item.isAvailable && styles.addBtnDisabled,
-                  ]}
-                  onPress={() => handleAddItem(item, cat.name)}
-                  disabled={!item.isAvailable}
-                >
-                  <Text style={styles.addBtnText}>
-                    {item.isAvailable ? 'Add' : 'Unavailable'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ))}
+              );
+            })}
           </View>
         ))}
       </ScrollView>
@@ -168,6 +225,19 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 13, fontWeight: '600' },
   desc: { fontSize: 14, color: brand.textSecondary, marginBottom: 6 },
   address: { fontSize: 13, color: brand.textSecondary, marginBottom: 20 },
+  deliveryTypeRow: { marginBottom: 16 },
+  deliveryTypeLabel: { fontSize: 14, fontWeight: '600', color: brand.textPrimary, marginBottom: 8 },
+  deliveryTypeButtons: { flexDirection: 'row', gap: 10 },
+  deliveryTypeBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+  deliveryTypeBtnActive: { backgroundColor: brand.primary, borderColor: brand.primary },
+  deliveryTypeBtnText: { fontSize: 14, color: brand.textPrimary },
+  deliveryTypeBtnTextActive: { color: '#fff', fontWeight: '600' },
   section: { marginBottom: 24 },
   sectionTitle: { fontSize: 18, fontWeight: '600', color: brand.textPrimary, marginBottom: 12 },
   itemRow: {
@@ -182,6 +252,7 @@ const styles = StyleSheet.create({
   itemInfo: { flex: 1 },
   itemName: { fontSize: 16, fontWeight: '600', color: brand.textPrimary },
   itemDesc: { fontSize: 13, color: brand.textSecondary, marginTop: 4 },
+  availabilityNote: { fontSize: 12, color: brand.textSecondary, marginTop: 2, fontStyle: 'italic' },
   itemPrice: { fontSize: 15, fontWeight: '600', color: brand.primary, marginTop: 4 },
   addBtn: {
     backgroundColor: brand.accent,

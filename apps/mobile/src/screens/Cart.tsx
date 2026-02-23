@@ -19,6 +19,20 @@ import { brand } from '../theme';
 import { AddressForm } from '../components/AddressForm';
 import type { Address } from '../types/address';
 
+type FeeStructure =
+  | { type: 'flat'; valueCents: number }
+  | { type: 'percent'; valuePercent: number };
+
+type RestaurantFees = {
+  pickupFee: FeeStructure;
+  deliveryFee: FeeStructure;
+};
+
+function computeFeeCents(subtotalCents: number, fee: FeeStructure): number {
+  if (fee.type === 'flat') return fee.valueCents;
+  return Math.round((subtotalCents * fee.valuePercent) / 100);
+}
+
 export default function Cart() {
   const navigation = useNavigation();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
@@ -27,10 +41,31 @@ export default function Cart() {
   const [deliveryType, setDeliveryType] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
   const [deliveryAddressId, setDeliveryAddressId] = useState<string | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
+  const [restaurantFees, setRestaurantFees] = useState<RestaurantFees | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingAddresses, setLoadingAddresses] = useState(false);
   const [showAddAddressForm, setShowAddAddressForm] = useState(false);
   const [showAddressList, setShowAddressList] = useState(false);
+
+  const subtotal = total;
+  const subtotalCents = Math.round(subtotal * 100);
+  const feeStructure =
+    restaurantFees && deliveryType === 'PICKUP'
+      ? restaurantFees.pickupFee
+      : restaurantFees?.deliveryFee;
+  const feeCents = feeStructure ? computeFeeCents(subtotalCents, feeStructure) : 0;
+  const totalWithFee = (subtotalCents + feeCents) / 100;
+
+  React.useEffect(() => {
+    if (restaurantId && items.length > 0) {
+      api
+        .get<{ pickupFee: FeeStructure; deliveryFee: FeeStructure }>(`/restaurants/${restaurantId}`)
+        .then((r) => setRestaurantFees({ pickupFee: r.data.pickupFee, deliveryFee: r.data.deliveryFee }))
+        .catch(() => setRestaurantFees(null));
+    } else {
+      setRestaurantFees(null);
+    }
+  }, [restaurantId, items.length]);
 
   React.useEffect(() => {
     if (deliveryType === 'DELIVERY' && token) {
@@ -296,9 +331,23 @@ export default function Cart() {
           )}
         </View>
       )}
+      {feeCents > 0 && (
+        <>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Subtotal</Text>
+            <Text style={styles.summaryValue}>${subtotal.toFixed(2)}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>
+              {deliveryType === 'PICKUP' ? 'Pickup fee' : 'Delivery fee'}
+            </Text>
+            <Text style={styles.summaryValue}>${(feeCents / 100).toFixed(2)}</Text>
+          </View>
+        </>
+      )}
       <View style={styles.totalRow}>
         <Text style={styles.totalLabel}>Total</Text>
-        <Text style={styles.totalValue}>${total.toFixed(2)}</Text>
+        <Text style={styles.totalValue}>${totalWithFee.toFixed(2)}</Text>
       </View>
       <TouchableOpacity
         style={[styles.checkoutBtn, loading && styles.checkoutBtnDisabled]}
@@ -394,6 +443,14 @@ const styles = StyleSheet.create({
   addressRowActive: { borderColor: brand.primary, backgroundColor: '#f0fdf4' },
   addressText: { fontSize: 14, color: brand.textPrimary },
   defaultBadge: { fontSize: 12, color: brand.primary, marginTop: 4 },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  summaryLabel: { fontSize: 14, color: brand.textSecondary },
+  summaryValue: { fontSize: 14, color: brand.textPrimary },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

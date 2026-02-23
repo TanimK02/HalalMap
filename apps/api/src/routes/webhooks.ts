@@ -72,6 +72,7 @@ webhooksRouter.post('/stripe', async (req: Request, res: Response) => {
     const deliveryAddressId =
       deliveryAddressIdRaw && deliveryAddressIdRaw !== '' ? deliveryAddressIdRaw : null;
     const totalPriceStr = meta.totalPrice;
+    const feeCentsStr = meta.feeCents;
     const itemsMeta = parseItemsFromMetadata(meta);
 
     if (
@@ -86,6 +87,7 @@ webhooksRouter.post('/stripe', async (req: Request, res: Response) => {
     }
 
     const totalPrice = new Decimal(totalPriceStr);
+    const feeCents = feeCentsStr != null ? parseInt(feeCentsStr, 10) : 0;
     const orderItems = itemsMeta.map((item) => ({
       menuItemId: item.menuItemId,
       quantity: item.quantity,
@@ -98,6 +100,7 @@ webhooksRouter.post('/stripe', async (req: Request, res: Response) => {
         restaurantId,
         status: 'PENDING',
         totalPrice,
+        feeCents: Number.isNaN(feeCents) ? 0 : feeCents,
         deliveryType,
         deliveryAddressId,
         stripePaymentIntentId: paymentIntent.id,

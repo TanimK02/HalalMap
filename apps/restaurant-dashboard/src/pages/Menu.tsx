@@ -53,7 +53,7 @@ export default function Menu() {
   }
 
   async function addItem(categoryId: string) {
-    const { name, description, price } = newItem;
+    const { name, description, price, availableForPickup, availableForDelivery } = newItem;
     if (!name?.trim() || price == null || price < 0) return;
     try {
       await api.post(`/restaurants/me/restaurant/categories/${categoryId}/items`, {
@@ -61,6 +61,8 @@ export default function Menu() {
         description: description?.trim() || undefined,
         price: Number(price),
         isAvailable: true,
+        availableForPickup: availableForPickup !== false,
+        availableForDelivery: availableForDelivery !== false,
       });
       setNewItem({});
       setEditingItem(null);
@@ -167,7 +169,7 @@ export default function Menu() {
 
           <ul className="space-y-2">
             {(cat.items ?? []).map((item) => (
-              <li key={item.id} className="flex items-center justify-between rounded bg-background px-3 py-2">
+              <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded bg-background px-3 py-2">
                 <div>
                   <span className="font-medium">{item.name}</span>
                   {item.description && (
@@ -177,8 +179,33 @@ export default function Menu() {
                   {!item.isAvailable && (
                     <span className="ml-2 rounded bg-gray-200 px-1.5 py-0.5 text-xs">Unavailable</span>
                   )}
+                  {(item.availableForPickup === false || item.availableForDelivery === false) && (
+                    <span className="ml-2 text-xs text-text-secondary">
+                      {item.availableForPickup === false && item.availableForDelivery === false
+                        ? '—'
+                        : item.availableForPickup === false
+                          ? 'Delivery only'
+                          : 'Pickup only'}
+                    </span>
+                  )}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex items-center gap-1 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={item.availableForPickup !== false}
+                      onChange={() => updateItem(item.id, { availableForPickup: !item.availableForPickup })}
+                    />
+                    Pickup
+                  </label>
+                  <label className="flex items-center gap-1 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={item.availableForDelivery !== false}
+                      onChange={() => updateItem(item.id, { availableForDelivery: !item.availableForDelivery })}
+                    />
+                    Delivery
+                  </label>
                   <button
                     type="button"
                     onClick={() => setEditingItem(editingItem === item.id ? null : item.id)}
@@ -206,7 +233,7 @@ export default function Menu() {
           </ul>
 
           {editingItem === `new-${cat.id}` ? (
-            <div className="mt-3 flex flex-wrap gap-2 rounded bg-background p-3">
+            <div className="mt-3 flex flex-wrap gap-2 rounded bg-background p-3 items-center">
               <input
                 type="text"
                 placeholder="Item name"
@@ -230,6 +257,22 @@ export default function Menu() {
                 onChange={(e) => setNewItem((n) => ({ ...n, price: e.target.value ? Number(e.target.value) : undefined }))}
                 className="w-20 rounded border border-gray-300 px-2 py-1"
               />
+              <label className="flex items-center gap-1 text-sm">
+                <input
+                  type="checkbox"
+                  checked={newItem.availableForPickup !== false}
+                  onChange={(e) => setNewItem((n) => ({ ...n, availableForPickup: e.target.checked }))}
+                />
+                Pickup
+              </label>
+              <label className="flex items-center gap-1 text-sm">
+                <input
+                  type="checkbox"
+                  checked={newItem.availableForDelivery !== false}
+                  onChange={(e) => setNewItem((n) => ({ ...n, availableForDelivery: e.target.checked }))}
+                />
+                Delivery
+              </label>
               <button
                 type="button"
                 onClick={() => addItem(cat.id)}

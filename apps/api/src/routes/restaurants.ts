@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { body, param, query, validationResult } from 'express-validator';
 import { prisma } from '../lib/prisma.js';
+import { getEffectiveFeeStructure } from '../lib/fees.js';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth.js';
 import type { HalalStatus } from '@halal-map/shared';
 
@@ -66,7 +67,7 @@ restaurantsRouter.get(
   }
 );
 
-// Public: get single restaurant with menu
+// Public: get single restaurant with menu and effective fee structure
 restaurantsRouter.get('/:id', param('id').isString(), async (req: Request, res: Response) => {
   const restaurant = await prisma.restaurant.findFirst({
     where: { id: req.params.id as string, approved: true },
@@ -83,7 +84,13 @@ restaurantsRouter.get('/:id', param('id').isString(), async (req: Request, res: 
     },
   });
   if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
-  return res.json(restaurant);
+  const pickupFee = getEffectiveFeeStructure(restaurant, 'PICKUP');
+  const deliveryFee = getEffectiveFeeStructure(restaurant, 'DELIVERY');
+  return res.json({
+    ...restaurant,
+    pickupFee,
+    deliveryFee,
+  });
 });
 
 // Owner: get my restaurant
@@ -174,6 +181,10 @@ restaurantsRouter.patch(
     body('businessHours').optional().isObject(),
     body('offersPickup').optional().isBoolean(),
     body('offersDelivery').optional().isBoolean(),
+    body('pickupFeeType').optional().isIn(['FLAT', 'PERCENT']),
+    body('pickupFeeValue').optional().isInt({ min: 0 }),
+    body('deliveryFeeType').optional().isIn(['FLAT', 'PERCENT']),
+    body('deliveryFeeValue').optional().isInt({ min: 0 }),
   ],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
@@ -184,24 +195,50 @@ restaurantsRouter.patch(
     });
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
 
-    const data = req.body;
+    const data = req.body as {
+      pickupFeeType?: string | null;
+      pickupFeeValue?: number | null;
+      deliveryFeeType?: string | null;
+      deliveryFeeValue?: number | null;
+    };
+    if (
+      (data.pickupFeeType != null && data.pickupFeeValue == null) ||
+      (data.pickupFeeType == null && data.pickupFeeValue != null)
+    ) {
+      return res.status(400).json({
+        error: 'pickupFeeType and pickupFeeValue must both be set or both be null',
+      });
+    }
+    if (
+      (data.deliveryFeeType != null && data.deliveryFeeValue == null) ||
+      (data.deliveryFeeType == null && data.deliveryFeeValue != null)
+    ) {
+      return res.status(400).json({
+        error: 'deliveryFeeType and deliveryFeeValue must both be set or both be null',
+      });
+    }
+
     const updated = await prisma.restaurant.update({
       where: { id: restaurant.id },
       data: {
-        ...(data.name != null && { name: data.name }),
-        ...(data.description !== undefined && { description: data.description || null }),
-        ...(data.phone !== undefined && { phone: data.phone || null }),
-        ...(data.address != null && { address: data.address }),
-        ...(data.halalStatuses != null && { halalStatuses: data.halalStatuses as HalalStatus[] }),
-        ...(data.certificateUrl !== undefined && { certificateUrl: data.certificateUrl || null }),
-        ...(data.certificateExpiresAt !== undefined && {
-          certificateExpiresAt: data.certificateExpiresAt
-            ? new Date(data.certificateExpiresAt)
+        ...(req.body.name != null && { name: req.body.name }),
+        ...(req.body.description !== undefined && { description: req.body.description || null }),
+        ...(req.body.phone !== undefined && { phone: req.body.phone || null }),
+        ...(req.body.address != null && { address: req.body.address }),
+        ...(req.body.halalStatuses != null && { halalStatuses: req.body.halalStatuses as HalalStatus[] }),
+        ...(req.body.certificateUrl !== undefined && { certificateUrl: req.body.certificateUrl || null }),
+        ...(req.body.certificateExpiresAt !== undefined && {
+          certificateExpiresAt: req.body.certificateExpiresAt
+            ? new Date(req.body.certificateExpiresAt)
             : null,
         }),
-        ...(data.businessHours !== undefined && { businessHours: data.businessHours }),
-        ...(data.offersPickup !== undefined && { offersPickup: data.offersPickup }),
-        ...(data.offersDelivery !== undefined && { offersDelivery: data.offersDelivery }),
+        ...(req.body.businessHours !== undefined && { businessHours: req.body.businessHours }),
+        ...(req.body.offersPickup !== undefined && { offersPickup: req.body.offersPickup }),
+        ...(req.body.offersDelivery !== undefined && { offersDelivery: req.body.offersDelivery }),
+        ...(data.pickupFeeType !== undefined && { pickupFeeType: data.pickupFeeType || null }),
+        ...(data.pickupFeeValue !== undefined && { pickupFeeValue: data.pickupFeeValue ?? null }),
+        ...(data.deliveryFeeType !== undefined && { deliveryFeeType: data.deliveryFeeType || null }),
+        ...(data.deliveryFeeValue !== undefined && { deliveryFeeValue: data.deliveryFeeValue ?? null }),
       },
     });
     return res.json(updated);
@@ -302,6 +339,8 @@ restaurantsRouter.post(
     body('price').isFloat({ min: 0 }),
     body('imageUrl').optional().trim(),
     body('isAvailable').optional().isBoolean(),
+    body('availableForPickup').optional().isBoolean(),
+    body('availableForDelivery').optional().isBoolean(),
     body('sortOrder').optional().isInt(),
   ],
   async (req: AuthRequest, res: Response) => {
@@ -313,7 +352,7 @@ restaurantsRouter.post(
       where: { id: req.params.categoryId as string, restaurantId: restaurant.id },
     });
     if (!category) return res.status(404).json({ error: 'Category not found' });
-    const { name, description, price, imageUrl, isAvailable, sortOrder } = req.body;
+    const { name, description, price, imageUrl, isAvailable, availableForPickup, availableForDelivery, sortOrder } = req.body;
     const item = await prisma.menuItem.create({
       data: {
         categoryId: category.id,
@@ -322,6 +361,8 @@ restaurantsRouter.post(
         price,
         imageUrl: imageUrl || null,
         isAvailable: isAvailable ?? true,
+        availableForPickup: availableForPickup ?? true,
+        availableForDelivery: availableForDelivery ?? true,
         sortOrder: sortOrder ?? 0,
       },
     });
@@ -340,6 +381,8 @@ restaurantsRouter.patch(
     body('price').optional().isFloat({ min: 0 }),
     body('imageUrl').optional().trim(),
     body('isAvailable').optional().isBoolean(),
+    body('availableForPickup').optional().isBoolean(),
+    body('availableForDelivery').optional().isBoolean(),
     body('sortOrder').optional().isInt(),
   ],
   async (req: AuthRequest, res: Response) => {
@@ -362,6 +405,8 @@ restaurantsRouter.patch(
         ...(data.price != null && { price: data.price }),
         ...(data.imageUrl !== undefined && { imageUrl: data.imageUrl || null }),
         ...(data.isAvailable !== undefined && { isAvailable: data.isAvailable }),
+        ...(data.availableForPickup !== undefined && { availableForPickup: data.availableForPickup }),
+        ...(data.availableForDelivery !== undefined && { availableForDelivery: data.availableForDelivery }),
         ...(data.sortOrder != null && { sortOrder: data.sortOrder }),
       },
     });

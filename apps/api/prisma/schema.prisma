@@ -81,6 +81,10 @@ model Restaurant {
   businessHours        Json?       // e.g. { "mon": { "open": "09:00", "close": "21:00" }, ... }
   offersPickup         Boolean     @default(true)
   offersDelivery       Boolean     @default(false)
+  pickupFeeType        String?     // FLAT | PERCENT; null = use platform default
+  pickupFeeValue       Int?        // cents if FLAT, percent if PERCENT
+  deliveryFeeType      String?
+  deliveryFeeValue     Int?
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 
@@ -99,15 +103,17 @@ model MenuCategory {
 }
 
 model MenuItem {
-  id          String       @id @default(cuid())
-  categoryId  String
-  category    MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  name        String
-  description String?
-  price       Decimal      @db.Decimal(10, 2)
-  imageUrl    String?
-  isAvailable Boolean      @default(true)
-  sortOrder   Int          @default(0)
+  id                   String       @id @default(cuid())
+  categoryId           String
+  category             MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name                 String
+  description          String?
+  price                Decimal      @db.Decimal(10, 2)
+  imageUrl             String?
+  isAvailable          Boolean      @default(true)
+  availableForPickup   Boolean      @default(true)
+  availableForDelivery Boolean      @default(true)
+  sortOrder            Int          @default(0)
 
   orderItems OrderItem[]
 }
@@ -120,6 +126,7 @@ model Order {
   restaurant             Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   status                 OrderStatus   @default(PENDING)
   totalPrice             Decimal       @db.Decimal(10, 2)
+  feeCents               Int           @default(0)
   deliveryType           DeliveryType
   deliveryAddressId      String?
   deliveryAddress        Address?      @relation("DeliveryAddress", fields: [deliveryAddressId], references: [id])

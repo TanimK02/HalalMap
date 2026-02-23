@@ -8,6 +8,7 @@ type OrderDetailData = {
   id: string;
   status: string;
   totalPrice: number | string;
+  feeCents?: number;
   deliveryType: string;
   createdAt: string;
   restaurant: { name: string; address: string };
@@ -81,6 +82,24 @@ export default function OrderDetail() {
           <Text style={styles.rowPrice}>${Number(line.priceAtOrder).toFixed(2)}</Text>
         </View>
       ))}
+      {(order.feeCents ?? 0) > 0 && (
+        <>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Subtotal</Text>
+            <Text style={styles.summaryValue}>
+              ${(Number(order.totalPrice) - (order.feeCents ?? 0) / 100).toFixed(2)}
+            </Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>
+              {order.deliveryType === 'PICKUP' ? 'Pickup fee' : 'Delivery fee'}
+            </Text>
+            <Text style={styles.summaryValue}>
+              ${((order.feeCents ?? 0) / 100).toFixed(2)}
+            </Text>
+          </View>
+        </>
+      )}
       <View style={styles.totalRow}>
         <Text style={styles.totalLabel}>Total</Text>
         <Text style={styles.totalValue}>${Number(order.totalPrice).toFixed(2)}</Text>
@@ -104,6 +123,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
   rowName: { fontSize: 16, color: brand.textPrimary },
   rowPrice: { fontSize: 16, color: brand.textSecondary },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  summaryLabel: { fontSize: 14, color: brand.textSecondary },
+  summaryValue: { fontSize: 14, color: brand.textPrimary },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E5E7EB' },
   totalLabel: { fontSize: 18, fontWeight: '600', color: brand.textPrimary },
   totalValue: { fontSize: 20, fontWeight: '700', color: brand.primary },

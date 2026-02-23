@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { body, param, query, validationResult } from 'express-validator';
 import Stripe from 'stripe';
 import { prisma } from '../lib/prisma.js';
+import { getEffectiveFeeCents } from '../lib/fees.js';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth.js';
 import type { DeliveryType, OrderStatus } from '@halal-map/shared';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -60,7 +61,7 @@ ordersRouter.post(
     }
 
     const allItems = restaurant.menuCategories.flatMap((c) => c.items);
-    let totalCents = 0;
+    let subtotalCents = 0;
     const orderItems: { menuItemId: string; quantity: number; priceAtOrder: Decimal }[] = [];
 
     for (const line of items) {
@@ -68,9 +69,19 @@ ordersRouter.post(
       if (!menuItem || !menuItem.isAvailable) {
         return res.status(400).json({ error: `Invalid or unavailable item: ${line.menuItemId}` });
       }
+      if (deliveryType === 'PICKUP' && menuItem.availableForPickup === false) {
+        return res.status(400).json({
+          error: `Item ${menuItem.name} is not available for pickup`,
+        });
+      }
+      if (deliveryType === 'DELIVERY' && menuItem.availableForDelivery === false) {
+        return res.status(400).json({
+          error: `Item ${menuItem.name} is not available for delivery`,
+        });
+      }
       const price = Number(menuItem.price);
       const lineTotal = price * line.quantity;
-      totalCents += Math.round(lineTotal * 100);
+      subtotalCents += Math.round(lineTotal * 100);
       orderItems.push({
         menuItemId: menuItem.id,
         quantity: line.quantity,
@@ -78,8 +89,10 @@ ordersRouter.post(
       });
     }
 
-    if (totalCents <= 0) return res.status(400).json({ error: 'Order total must be positive' });
+    if (subtotalCents <= 0) return res.status(400).json({ error: 'Order total must be positive' });
 
+    const feeCents = getEffectiveFeeCents(restaurant, deliveryType, subtotalCents);
+    const totalCents = subtotalCents + feeCents;
     const totalPrice = totalCents / 100;
 
     if (stripe) {
@@ -95,6 +108,7 @@ ordersRouter.post(
         deliveryType,
         deliveryAddressId: deliveryType === 'DELIVERY' && deliveryAddressId ? deliveryAddressId : '',
         totalPrice: String(totalPrice),
+        feeCents: String(feeCents),
       };
       const maxMetaVal = 500;
       if (itemsJson.length <= maxMetaVal) {
@@ -124,6 +138,7 @@ ordersRouter.post(
         restaurantId: restaurant.id,
         status: 'PENDING',
         totalPrice: new Decimal(totalPrice),
+        feeCents,
         deliveryType,
         deliveryAddressId: deliveryType === 'DELIVERY' ? deliveryAddressId : null,
         items: {
@@ -203,12 +218,14 @@ ordersRouter.post(
     const deliveryAddressId =
       deliveryAddressIdRaw && deliveryAddressIdRaw !== '' ? deliveryAddressIdRaw : null;
     const totalPriceStr = meta.totalPrice;
+    const feeCentsStr = meta.feeCents;
     const itemsMeta = parseItemsFromPaymentMeta(meta);
     if (!userId || !restaurantId || totalPriceStr === undefined || itemsMeta.length === 0) {
       return res.status(400).json({ error: 'Invalid payment intent metadata' });
     }
 
     const totalPrice = new Decimal(totalPriceStr);
+    const feeCents = feeCentsStr != null ? parseInt(feeCentsStr, 10) : 0;
     const orderItems = itemsMeta.map((item) => ({
       menuItemId: item.menuItemId,
       quantity: item.quantity,
@@ -221,6 +238,7 @@ ordersRouter.post(
         restaurantId,
         status: 'PENDING',
         totalPrice,
+        feeCents: Number.isNaN(feeCents) ? 0 : feeCents,
         deliveryType,
         deliveryAddressId,
         stripePaymentIntentId: paymentIntentId,
