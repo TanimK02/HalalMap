@@ -44,6 +44,10 @@ async function main() {
         approved: true,
         offersPickup: true,
         offersDelivery: true,
+        pickupFeeType: null,
+        pickupFeeValue: null,
+        deliveryFeeType: null,
+        deliveryFeeValue: null,
       },
     });
   }
@@ -66,6 +70,8 @@ async function main() {
         description: 'Fragrant basmati rice with tender halal chicken.',
         price: 12.99,
         isAvailable: true,
+        availableForPickup: true,
+        availableForDelivery: true,
         sortOrder: 0,
       },
     });
