@@ -109,7 +109,7 @@ ordersRouter.post(
         amount: totalCents,
         currency: 'usd',
         metadata,
-        automatic_payment_methods: { enabled: true },
+        payment_method_types: ['card', 'link'],
       });
 
       return res.status(201).json({
