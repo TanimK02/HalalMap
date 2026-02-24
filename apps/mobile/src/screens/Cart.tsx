@@ -198,7 +198,17 @@ export default function Cart() {
         <Text style={styles.empty}>Your cart is empty.</Text>
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={() => (navigation as { goBack: () => void }).goBack()}
+          onPress={() => {
+            // When Cart is opened from tab bar, goBack() does nothing. Navigate to Home instead.
+            const nav = navigation as { getParent?: () => { navigate: (a: string, b?: object) => void } | null; goBack: () => void };
+            const parent = nav.getParent?.();
+            if (parent) {
+              (parent as { navigate: (a: string, b?: object) => void }).navigate('Main', { screen: 'HomeTab' });
+            } else {
+              nav.goBack();
+            }
+          }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Text style={styles.backBtnText}>Browse restaurants</Text>
         </TouchableOpacity>

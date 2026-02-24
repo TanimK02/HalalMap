@@ -120,8 +120,16 @@ function AppNavigator() {
         ) : (
           <>
             <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
-            <Stack.Screen name="RestaurantDetail" component={RestaurantDetail} options={{ title: 'Restaurant' }} />
-            <Stack.Screen name="OrderDetail" component={OrderDetail} options={{ title: 'Order' }} />
+            <Stack.Screen
+              name="RestaurantDetail"
+              component={RestaurantDetail}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="OrderDetail"
+              component={OrderDetail}
+              options={{ headerShown: false }}
+            />
           </>
         )}
       </StackNav>

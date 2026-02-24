@@ -18,10 +18,15 @@ export function ViewCartBar({ currentRouteName, absolute = true }: ViewCartBarPr
   if (items.length === 0) return null;
   if (currentRouteName === 'CartTab') return null;
 
-  const goToCart = () =>
-    (navigation as { navigate: (a: string, b?: object) => void }).navigate('Main', {
+  const goToCart = () => {
+    // When inside Main (tab navigator), navigation is the tab nav and has no 'Main' screen.
+    // Use parent stack to navigate to Main/CartTab. When on RestaurantDetail/OrderDetail,
+    // navigation is the stack, so getParent() may be container and we still use stack.
+    const nav = (navigation as { getParent?: () => { navigate: (a: string, b?: object) => void } | null }).getParent?.() ?? navigation;
+    (nav as { navigate: (a: string, b?: object) => void }).navigate('Main', {
       screen: 'CartTab',
     });
+  };
 
   const barStyle = [
     styles.bar,
@@ -29,8 +34,13 @@ export function ViewCartBar({ currentRouteName, absolute = true }: ViewCartBarPr
   ];
 
   return (
-    <View style={barStyle}>
-      <TouchableOpacity style={styles.button} onPress={goToCart} activeOpacity={0.8}>
+    <View style={barStyle} pointerEvents="box-none">
+      <TouchableOpacity
+        style={styles.button}
+        onPress={goToCart}
+        activeOpacity={0.8}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
         <Text style={styles.label}>
           View Cart ({items.length} {items.length === 1 ? 'item' : 'items'})
         </Text>

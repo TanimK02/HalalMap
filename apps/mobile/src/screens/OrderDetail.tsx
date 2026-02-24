@@ -3,6 +3,7 @@ import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-nat
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { api } from '../api';
 import { brand } from '../theme';
+import { ScreenHeader } from '../components/ScreenHeader';
 
 type OrderDetailData = {
   id: string;
@@ -42,21 +43,29 @@ export default function OrderDetail() {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={brand.primary} />
+      <View style={styles.wrapper}>
+        <ScreenHeader title="Order" />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={brand.primary} />
+        </View>
       </View>
     );
   }
   if (!order) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.empty}>Order not found.</Text>
+      <View style={styles.wrapper}>
+        <ScreenHeader title="Order" />
+        <View style={styles.centered}>
+          <Text style={styles.empty}>Order not found.</Text>
+        </View>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <View style={styles.wrapper}>
+      <ScreenHeader title="Order" />
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Text style={styles.restaurantName}>{order.restaurant?.name}</Text>
         <View style={styles.statusBadge}>
@@ -105,10 +114,12 @@ export default function OrderDetail() {
         <Text style={styles.totalValue}>${Number(order.totalPrice).toFixed(2)}</Text>
       </View>
     </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrapper: { flex: 1 },
   container: { flex: 1, backgroundColor: brand.background },
   content: { padding: 16, paddingBottom: 32 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },

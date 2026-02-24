@@ -12,6 +12,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import { api } from '../api';
 import { useCart } from '../context/CartContext';
 import { ViewCartBar } from '../components/ViewCartBar';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { brand, halalBadgeStyles, HALAL_LABELS } from '../theme';
 
 type MenuCategory = {
@@ -102,15 +103,21 @@ export default function RestaurantDetail() {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={brand.primary} />
+      <View style={styles.wrapper}>
+        <ScreenHeader title="Restaurant" />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={brand.primary} />
+        </View>
       </View>
     );
   }
   if (!data) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.empty}>Restaurant not found.</Text>
+      <View style={styles.wrapper}>
+        <ScreenHeader title="Restaurant" />
+        <View style={styles.centered}>
+          <Text style={styles.empty}>Restaurant not found.</Text>
+        </View>
       </View>
     );
   }
@@ -119,6 +126,7 @@ export default function RestaurantDetail() {
 
   return (
     <View style={styles.wrapper}>
+      <ScreenHeader title={data.name} />
       <ScrollView
         style={styles.container}
         contentContainerStyle={[styles.content, items.length > 0 && styles.contentWithBar]}
