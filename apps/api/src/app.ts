@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import { geocode } from './lib/geocode.js';
 import { authRouter } from './routes/auth.js';
 import { usersRouter } from './routes/users.js';
 import { restaurantsRouter } from './routes/restaurants.js';
@@ -49,6 +50,14 @@ app.use('/orders', ordersRouter);
 app.use('/admin', adminRouter);
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+app.get('/geocode', async (req, res) => {
+  const address = req.query.address as string | undefined;
+  if (!address?.trim()) return res.status(400).json({ error: 'address query required' });
+  const coords = await geocode(address.trim());
+  if (!coords) return res.status(404).json({ error: 'Address not found' });
+  return res.json(coords);
+});
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);

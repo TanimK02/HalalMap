@@ -50,16 +50,18 @@ model User {
 }
 
 model Address {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  label     String?
-  street    String
-  city      String
-  state     String?
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label      String?
+  street     String
+  city       String
+  state      String?
   postalCode String
-  isDefault Boolean  @default(false)
-  createdAt DateTime @default(now())
+  latitude   Float?
+  longitude  Float?
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
 
   orders Order[] @relation("DeliveryAddress")
 }

@@ -11,10 +11,14 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.halalmap.app"
+      "bundleIdentifier": "com.halalmap.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Halal Map uses your location to show nearby restaurants."
+      }
     },
     "android": {
-      "package": "com.halalmap.app"
+      "package": "com.halalmap.app",
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
     },
     "scheme": "halalmap"
   }

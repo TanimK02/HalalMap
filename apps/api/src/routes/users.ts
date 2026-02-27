@@ -1,7 +1,13 @@
 import { Router, Response } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import { prisma } from '../lib/prisma.js';
+import { geocode } from '../lib/geocode.js';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth.js';
+
+function buildAddressString(parts: { street: string; city: string; state?: string | null; postalCode: string }): string {
+  const { street, city, state, postalCode } = parts;
+  return [street, city, state?.trim() || '', postalCode].filter(Boolean).join(', ');
+}
 
 export const usersRouter = Router();
 
@@ -70,6 +76,8 @@ usersRouter.post(
         data: { isDefault: false },
       });
     }
+    const addressStr = buildAddressString({ street, city, state, postalCode });
+    const coords = await geocode(addressStr);
     const address = await prisma.address.create({
       data: {
         userId: req.userId!,
@@ -78,6 +86,8 @@ usersRouter.post(
         city,
         state: state || null,
         postalCode,
+        latitude: coords?.latitude ?? null,
+        longitude: coords?.longitude ?? null,
         isDefault: !!isDefault,
       },
     });
@@ -118,6 +128,14 @@ usersRouter.patch(
         data: { isDefault: false },
       });
     }
+    const merged = {
+      street: street ?? existing.street,
+      city: city ?? existing.city,
+      state: state !== undefined ? state : existing.state,
+      postalCode: postalCode ?? existing.postalCode,
+    };
+    const addressStr = buildAddressString(merged);
+    const coords = await geocode(addressStr);
     const address = await prisma.address.update({
       where: { id: req.params.id as string },
       data: {
@@ -126,6 +144,7 @@ usersRouter.patch(
         ...(city !== undefined && { city }),
         ...(state !== undefined && { state: state || null }),
         ...(postalCode !== undefined && { postalCode }),
+        ...(coords != null && { latitude: coords.latitude, longitude: coords.longitude }),
         ...(isDefault !== undefined && { isDefault: !!isDefault }),
       },
     });

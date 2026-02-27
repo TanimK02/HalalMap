@@ -32,6 +32,7 @@ async function main() {
   let restaurant = await prisma.restaurant.findUnique({
     where: { ownerId: owner.id },
   });
+  const seedCoords = { latitude: 37.7749, longitude: -122.4194 };
   if (!restaurant) {
     restaurant = await prisma.restaurant.create({
       data: {
@@ -40,6 +41,7 @@ async function main() {
         description: 'Certified halal restaurant serving fresh meals.',
         phone: '+1234567890',
         address: '123 Main St, City',
+        ...seedCoords,
         halalStatuses: ['CERTIFIED_HALAL'],
         approved: true,
         offersPickup: true,
@@ -49,6 +51,11 @@ async function main() {
         deliveryFeeType: null,
         deliveryFeeValue: null,
       },
+    });
+  } else if (restaurant.latitude == null || restaurant.longitude == null) {
+    restaurant = await prisma.restaurant.update({
+      where: { id: restaurant.id },
+      data: seedCoords,
     });
   }
 

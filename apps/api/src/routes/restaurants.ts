@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { body, param, query, validationResult } from 'express-validator';
 import { prisma } from '../lib/prisma.js';
 import { getEffectiveFeeStructure } from '../lib/fees.js';
+import { geocode, haversineMiles } from '../lib/geocode.js';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth.js';
 import type { HalalStatus } from '@halal-map/shared';
 
@@ -11,18 +12,25 @@ const HALAL_STATUS_VALUES: HalalStatus[] = [
 
 export const restaurantsRouter = Router();
 
-// Public: list approved restaurants (with optional filters)
+// Public: list approved restaurants (with optional filters and optional location sort)
 restaurantsRouter.get(
   '/',
   [
     query('halalStatuses').optional().trim(),
     query('search').optional().trim(),
+    query('lat').optional(),
+    query('lng').optional(),
   ],
   async (req: Request, res: Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
     const halalStatusesParam = (req.query.halalStatuses as string)?.split(',').map((s) => s.trim()).filter(Boolean) ?? [];
     const search = req.query.search as string | undefined;
+    const latParam = req.query.lat as string | undefined;
+    const lngParam = req.query.lng as string | undefined;
+    const lat = latParam != null ? parseFloat(latParam) : NaN;
+    const lng = lngParam != null ? parseFloat(lngParam) : NaN;
+    const useLocation = !Number.isNaN(lat) && !Number.isNaN(lng);
 
     if (halalStatusesParam.length > 0) {
       const invalid = halalStatusesParam.filter((s) => !HALAL_STATUS_VALUES.includes(s as HalalStatus));
@@ -33,6 +41,8 @@ restaurantsRouter.get(
 
     const where: {
       approved: boolean;
+      latitude?: { not: null };
+      longitude?: { not: null };
       halalStatuses?: { hasEvery: HalalStatus[] };
       OR?: { name?: { contains: string; mode: 'insensitive' }; description?: { contains: string; mode: 'insensitive' } }[];
     } = {
@@ -47,22 +57,42 @@ restaurantsRouter.get(
         { description: { contains: search, mode: 'insensitive' } },
       ];
     }
+    if (useLocation) {
+      where.latitude = { not: null };
+      where.longitude = { not: null };
+    }
+
+    const select = {
+      id: true,
+      name: true,
+      description: true,
+      phone: true,
+      address: true,
+      halalStatuses: true,
+      certificateExpiresAt: true,
+      offersPickup: true,
+      offersDelivery: true,
+      ...(useLocation ? { latitude: true, longitude: true } : {}),
+    };
 
     const restaurants = await prisma.restaurant.findMany({
       where,
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        phone: true,
-        address: true,
-        halalStatuses: true,
-        certificateExpiresAt: true,
-        offersPickup: true,
-        offersDelivery: true,
-      },
-      orderBy: { name: 'asc' },
+      select,
+      orderBy: useLocation ? undefined : { name: 'asc' },
     });
+
+    if (useLocation && restaurants.length > 0) {
+      const withDistance = (restaurants as (typeof restaurants[0] & { latitude: number; longitude: number })[]).map(
+        (r) => {
+          const distanceMiles = Math.round(haversineMiles(lat, lng, r.latitude, r.longitude) * 100) / 100;
+          const { latitude: _lat, longitude: _lng, ...rest } = r;
+          return { ...rest, distanceMiles };
+        }
+      );
+      withDistance.sort((a, b) => a.distanceMiles - b.distanceMiles);
+      return res.json(withDistance);
+    }
+
     return res.json(restaurants);
   }
 );
@@ -142,6 +172,7 @@ restaurantsRouter.post(
     if (existing) return res.status(409).json({ error: 'Restaurant already exists for this account' });
 
     const data = req.body;
+    const coords = await geocode(data.address);
     const restaurant = await prisma.restaurant.create({
       data: {
         ownerId: req.userId!,
@@ -149,6 +180,8 @@ restaurantsRouter.post(
         description: data.description || null,
         phone: data.phone || null,
         address: data.address,
+        latitude: coords?.latitude ?? null,
+        longitude: coords?.longitude ?? null,
         halalStatuses: data.halalStatuses as HalalStatus[],
         certificateUrl: data.certificateUrl || null,
         certificateExpiresAt: data.certificateExpiresAt
@@ -218,6 +251,11 @@ restaurantsRouter.patch(
       });
     }
 
+    let latLng: { latitude: number; longitude: number } | null = null;
+    if (req.body.address != null) {
+      latLng = await geocode(req.body.address);
+    }
+
     const updated = await prisma.restaurant.update({
       where: { id: restaurant.id },
       data: {
@@ -225,6 +263,7 @@ restaurantsRouter.patch(
         ...(req.body.description !== undefined && { description: req.body.description || null }),
         ...(req.body.phone !== undefined && { phone: req.body.phone || null }),
         ...(req.body.address != null && { address: req.body.address }),
+        ...(req.body.address != null && (latLng != null ? { latitude: latLng.latitude, longitude: latLng.longitude } : { latitude: null, longitude: null })),
         ...(req.body.halalStatuses != null && { halalStatuses: req.body.halalStatuses as HalalStatus[] }),
         ...(req.body.certificateUrl !== undefined && { certificateUrl: req.body.certificateUrl || null }),
         ...(req.body.certificateExpiresAt !== undefined && {
