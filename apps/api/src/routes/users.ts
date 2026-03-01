@@ -160,3 +160,55 @@ usersRouter.delete('/addresses/:id', param('id').isString(), async (req: AuthReq
   await prisma.address.delete({ where: { id: req.params.id as string } });
   return res.status(204).send();
 });
+
+// Favorites: list favorite restaurants (order by createdAt desc)
+usersRouter.get('/favorites/restaurants', async (req: AuthRequest, res: Response) => {
+  const rows = await prisma.userFavoriteRestaurant.findMany({
+    where: { userId: req.userId! },
+    include: { restaurant: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  const restaurants = rows.map((r) => ({ ...r.restaurant, favoredAt: r.createdAt }));
+  return res.json(restaurants);
+});
+
+// Favorites: add restaurant (idempotent)
+usersRouter.post(
+  '/favorites/restaurants/:restaurantId',
+  param('restaurantId').isString().notEmpty(),
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    const restaurantId = req.params.restaurantId as string;
+    const restaurant = await prisma.restaurant.findFirst({
+      where: { id: restaurantId, approved: true },
+    });
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+    const existing = await prisma.userFavoriteRestaurant.findUnique({
+      where: {
+        userId_restaurantId: { userId: req.userId!, restaurantId },
+      },
+    });
+    if (existing) return res.status(200).json(existing);
+    const favorite = await prisma.userFavoriteRestaurant.create({
+      data: { userId: req.userId!, restaurantId },
+      include: { restaurant: true },
+    });
+    return res.status(201).json(favorite);
+  }
+);
+
+// Favorites: remove restaurant (idempotent)
+usersRouter.delete(
+  '/favorites/restaurants/:restaurantId',
+  param('restaurantId').isString().notEmpty(),
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    const restaurantId = req.params.restaurantId as string;
+    await prisma.userFavoriteRestaurant.deleteMany({
+      where: { userId: req.userId!, restaurantId },
+    });
+    return res.status(204).send();
+  }
+);

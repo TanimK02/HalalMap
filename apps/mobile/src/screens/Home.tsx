@@ -14,6 +14,8 @@ import {
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { api } from '../api';
+import { useAuth } from '../context/AuthContext';
+import { useFavorites } from '../context/FavoritesContext';
 import { brand, halalBadgeStyles, HALAL_LABELS } from '../theme';
 import { getHoursLabel, type BusinessHoursMap } from '../utils/businessHours';
 
@@ -38,6 +40,8 @@ type Address = {
 
 export default function Home() {
   const navigation = useNavigation();
+  const { user } = useAuth();
+  const { favoriteRestaurants } = useFavorites();
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -179,6 +183,41 @@ export default function Home() {
   }
 
   const sections = buildSections();
+
+  const favoritesHeader =
+    user && favoriteRestaurants.length > 0 ? (
+      <View style={styles.favoritesSection}>
+        <Text style={styles.favoritesSectionTitle}>Your favorites</Text>
+        <FlatList
+          horizontal
+          data={favoriteRestaurants}
+          keyExtractor={(item) => item.id}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.favoritesList}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.favoriteCard}
+              onPress={() =>
+                (navigation as { navigate: (s: string, p: object) => void }).navigate(
+                  'RestaurantDetail',
+                  { restaurantId: item.id, name: item.name }
+                )
+              }
+              activeOpacity={0.7}
+            >
+              <Text style={styles.favoriteCardTitle} numberOfLines={1}>
+                {item.name}
+              </Text>
+              {item.description ? (
+                <Text style={styles.favoriteCardDesc} numberOfLines={2}>
+                  {item.description}
+                </Text>
+              ) : null}
+            </TouchableOpacity>
+          )}
+        />
+      </View>
+    ) : null;
 
   function renderRestaurantCard(item: Restaurant) {
     return (
@@ -338,6 +377,7 @@ export default function Home() {
         <SectionList
           sections={sections}
           keyExtractor={(item) => item.id}
+          ListHeaderComponent={favoritesHeader}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[brand.primary]} />
           }
@@ -359,6 +399,7 @@ export default function Home() {
         <FlatList
           data={restaurants}
           keyExtractor={(item) => item.id}
+          ListHeaderComponent={favoritesHeader}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[brand.primary]} />
           }
@@ -438,6 +479,24 @@ const styles = StyleSheet.create({
   radiusChipActive: { backgroundColor: brand.primary },
   radiusChipText: { fontSize: 13, color: brand.textPrimary },
   radiusChipTextActive: { color: '#fff', fontWeight: '600' },
+  favoritesSection: { marginBottom: 16 },
+  favoritesSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: brand.textPrimary,
+    marginBottom: 10,
+    paddingHorizontal: 0,
+  },
+  favoritesList: { gap: 12, paddingBottom: 4 },
+  favoriteCard: {
+    width: 160,
+    backgroundColor: brand.surface,
+    borderRadius: 12,
+    padding: 12,
+    marginRight: 12,
+  },
+  favoriteCardTitle: { fontSize: 16, fontWeight: '600', color: brand.textPrimary },
+  favoriteCardDesc: { fontSize: 13, color: brand.textSecondary, marginTop: 4 },
   sectionHeader: {
     paddingVertical: 8,
     paddingTop: 16,

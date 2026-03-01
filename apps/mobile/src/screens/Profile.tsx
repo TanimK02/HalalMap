@@ -8,14 +8,18 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
+import { useFavorites } from '../context/FavoritesContext';
 import { api } from '../api';
 import { brand } from '../theme';
 import { AddressForm } from '../components/AddressForm';
 import type { Address } from '../types/address';
 
 export default function Profile() {
+  const navigation = useNavigation();
   const { user, logout } = useAuth();
+  const { favoriteRestaurants, loading: favoritesLoading } = useFavorites();
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -72,6 +76,34 @@ export default function Profile() {
         <Text style={styles.sectionTitle}>Account</Text>
         <Text style={styles.text}>{user?.name}</Text>
         <Text style={styles.textSecondary}>{user?.email}</Text>
+      </View>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Favorite restaurants</Text>
+        {favoritesLoading ? (
+          <ActivityIndicator size="small" color={brand.primary} style={styles.favLoader} />
+        ) : favoriteRestaurants.length === 0 ? (
+          <Text style={styles.emptyFav}>You haven&apos;t saved any restaurants yet.</Text>
+        ) : (
+          favoriteRestaurants.map((rest) => (
+            <TouchableOpacity
+              key={rest.id}
+              style={styles.favCard}
+              onPress={() =>
+                (navigation as { navigate: (s: string, p: object) => void }).navigate(
+                  'RestaurantDetail',
+                  { restaurantId: rest.id, name: rest.name }
+                )
+              }
+            >
+              <Text style={styles.favCardTitle}>{rest.name}</Text>
+              {rest.address ? (
+                <Text style={styles.favCardAddress} numberOfLines={1}>
+                  {rest.address}
+                </Text>
+              ) : null}
+            </TouchableOpacity>
+          ))
+        )}
       </View>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Saved addresses</Text>
@@ -142,4 +174,14 @@ const styles = StyleSheet.create({
   addBtnText: { color: brand.primary, fontWeight: '600' },
   logoutBtn: { marginTop: 24, padding: 14, backgroundColor: '#fef2f2', borderRadius: 8, alignItems: 'center' },
   logoutBtnText: { color: '#b91c1c', fontWeight: '600' },
+  favLoader: { marginVertical: 8 },
+  emptyFav: { fontSize: 14, color: brand.textSecondary, fontStyle: 'italic' },
+  favCard: {
+    backgroundColor: brand.surface,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  favCardTitle: { fontSize: 16, fontWeight: '600', color: brand.textPrimary },
+  favCardAddress: { fontSize: 13, color: brand.textSecondary, marginTop: 4 },
 });

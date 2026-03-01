@@ -14,6 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { api } from '../api';
 import { useCart } from '../context/CartContext';
+import { useFavorites } from '../context/FavoritesContext';
+import { useAuth } from '../context/AuthContext';
 import { ViewCartBar } from '../components/ViewCartBar';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { brand, halalBadgeStyles, HALAL_LABELS } from '../theme';
@@ -122,9 +124,12 @@ export default function RestaurantDetail() {
   const route = useRoute<RouteProp<{ params: RouteParams }, 'params'>>();
   const { restaurantId, name: restaurantName } = route.params ?? { restaurantId: '', name: '' };
   const { addItem, items, restaurantId: cartRestaurantId } = useCart();
+  const { user } = useAuth();
+  const { isFavorited, addFavorite, removeFavorite } = useFavorites();
   const [data, setData] = useState<RestaurantDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [deliveryType, setDeliveryType] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
 
   useEffect(() => {
     if (!restaurantId) return;
@@ -208,6 +213,50 @@ export default function RestaurantDetail() {
       >
         <View style={styles.header}>
           <Text style={styles.title}>{data.name}</Text>
+          {user ? (
+            <TouchableOpacity
+              style={styles.favoriteBtn}
+              onPress={async () => {
+                if (favoriteBusy) return;
+                setFavoriteBusy(true);
+                try {
+                  if (isFavorited(data.id)) await removeFavorite(data.id);
+                  else await addFavorite(data.id);
+                } finally {
+                  setFavoriteBusy(false);
+                }
+              }}
+              disabled={favoriteBusy}
+              accessibilityLabel={isFavorited(data.id) ? 'Remove from favorites' : 'Add to favorites'}
+            >
+              <Ionicons
+                name={isFavorited(data.id) ? 'heart' : 'heart-outline'}
+                size={26}
+                color={isFavorited(data.id) ? '#dc2626' : brand.textSecondary}
+              />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.favoriteBtn}
+              onPress={() =>
+                Alert.alert(
+                  'Sign in to save favorites',
+                  'Create an account or sign in to save your favorite restaurants.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Sign in',
+                      onPress: () =>
+                        (navigation as { navigate: (s: string) => void }).navigate('Login'),
+                    },
+                  ]
+                )
+              }
+              accessibilityLabel="Sign in to save favorites"
+            >
+              <Ionicons name="heart-outline" size={26} color={brand.textSecondary} />
+            </TouchableOpacity>
+          )}
           <View style={styles.badgeRow}>
             {(data.halalStatuses ?? []).map((status) => {
               const style = badgeStyle(status);
@@ -335,8 +384,9 @@ const styles = StyleSheet.create({
   contentWithBar: { paddingBottom: 80 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   empty: { fontSize: 16, color: brand.textSecondary },
-  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 10 },
-  title: { fontSize: 22, fontWeight: '700', color: brand.textPrimary, flex: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 10, flexWrap: 'wrap' },
+  title: { fontSize: 22, fontWeight: '700', color: brand.textPrimary, flex: 1, minWidth: 0 },
+  favoriteBtn: { padding: 4, marginLeft: 4 },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   badge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
   badgeText: { fontSize: 13, fontWeight: '600' },

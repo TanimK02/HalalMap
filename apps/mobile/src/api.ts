@@ -26,3 +26,28 @@ export async function setStoredToken(token: string | null) {
 export async function getStoredToken() {
   return AsyncStorage.getItem(TOKEN_KEY);
 }
+
+// Favorites (require auth)
+export type FavoriteRestaurant = {
+  id: string;
+  name: string;
+  description: string | null;
+  address: string;
+  halalStatuses: string[];
+  offersPickup: boolean;
+  offersDelivery: boolean;
+  favoredAt?: string;
+};
+
+export async function getFavoriteRestaurants(): Promise<FavoriteRestaurant[]> {
+  const { data } = await api.get<FavoriteRestaurant[]>('/users/favorites/restaurants');
+  return data ?? [];
+}
+
+export async function addFavoriteRestaurant(restaurantId: string): Promise<void> {
+  await api.post(`/users/favorites/restaurants/${restaurantId}`);
+}
+
+export async function removeFavoriteRestaurant(restaurantId: string): Promise<void> {
+  await api.delete(`/users/favorites/restaurants/${restaurantId}`);
+}
