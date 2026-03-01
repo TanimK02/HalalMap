@@ -4,7 +4,8 @@
     "strict": true,
     "skipLibCheck": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] }
+    "paths": { "@/*": ["src/*"] },
+    "jsx": "react-jsx"
   },
   "include": ["**/*.ts", "**/*.tsx"]
 }

@@ -4,6 +4,7 @@ import {
   Text,
   FlatList,
   SectionList,
+  ScrollView,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
@@ -17,6 +18,7 @@ import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useFavorites } from '../context/FavoritesContext';
 import { brand, halalBadgeStyles, HALAL_LABELS, hoursStatusColors } from '../theme';
+import Slider from '@react-native-community/slider';
 import { getHoursLabel, getHoursStatus, type BusinessHoursMap } from '../utils/businessHours';
 
 type Restaurant = {
@@ -52,7 +54,8 @@ export default function Home() {
   const [manualAddress, setManualAddress] = useState('');
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [radiusMiles, setRadiusMiles] = useState(5);
-  const RADIUS_OPTIONS = [5, 10, 25];
+  const RADIUS_MIN = 1;
+  const RADIUS_MAX = 50;
 
   const resolveLocation = useCallback(async () => {
     setLocationResolving(true);
@@ -149,37 +152,13 @@ export default function Home() {
 
   const hasDistanceData = restaurants.length > 0 && restaurants.some((r) => r.distanceMiles != null);
 
+  const withinRadius = hasDistanceData
+    ? restaurants.filter((r) => (r.distanceMiles ?? Infinity) <= radiusMiles)
+    : [];
+
   function buildSections(): { title: string; data: Restaurant[] }[] {
-    if (!hasDistanceData) return [];
-    const r = radiusMiles;
-    const bounds = r === 5 ? [5, 10] : r === 10 ? [10, 25] : [25];
-    const sections: { title: string; data: Restaurant[] }[] = [];
-    if (bounds.length === 2) {
-      sections.push({
-        title: `Within ${bounds[0]} mi`,
-        data: restaurants.filter((x) => (x.distanceMiles ?? 0) < bounds[0]),
-      });
-      sections.push({
-        title: `${bounds[0]}–${bounds[1]} mi`,
-        data: restaurants.filter(
-          (x) => (x.distanceMiles ?? 0) >= bounds[0] && (x.distanceMiles ?? 0) < bounds[1]
-        ),
-      });
-      sections.push({
-        title: `${bounds[1]}+ mi`,
-        data: restaurants.filter((x) => (x.distanceMiles ?? 0) >= bounds[1]),
-      });
-    } else {
-      sections.push({
-        title: `Within ${bounds[0]} mi`,
-        data: restaurants.filter((x) => (x.distanceMiles ?? 0) < bounds[0]),
-      });
-      sections.push({
-        title: `${bounds[0]}+ mi`,
-        data: restaurants.filter((x) => (x.distanceMiles ?? 0) >= bounds[0]),
-      });
-    }
-    return sections.filter((s) => s.data.length > 0);
+    if (withinRadius.length === 0) return [];
+    return [{ title: `Within ${radiusMiles} mi`, data: withinRadius }];
   }
 
   const sections = buildSections();
@@ -356,22 +335,18 @@ export default function Home() {
         />
         {hasDistanceData && (
           <View style={styles.radiusRow}>
-            <Text style={styles.radiusLabel}>Within: </Text>
-            <View style={styles.radiusChips}>
-              {RADIUS_OPTIONS.map((mi) => (
-                <TouchableOpacity
-                  key={mi}
-                  style={[styles.radiusChip, radiusMiles === mi && styles.radiusChipActive]}
-                  onPress={() => setRadiusMiles(mi)}
-                >
-                  <Text
-                    style={[styles.radiusChipText, radiusMiles === mi && styles.radiusChipTextActive]}
-                  >
-                    {mi} mi
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <Text style={styles.radiusLabel}>Within: {radiusMiles} mi</Text>
+            <Slider
+              style={styles.radiusSlider}
+              value={radiusMiles}
+              minimumValue={RADIUS_MIN}
+              maximumValue={RADIUS_MAX}
+              step={1}
+              onValueChange={(v: number) => setRadiusMiles(Math.round(v))}
+              minimumTrackTintColor={brand.primary}
+              maximumTrackTintColor="#E5E7EB"
+              thumbTintColor={brand.primary}
+            />
           </View>
         )}
       </View>
@@ -395,12 +370,16 @@ export default function Home() {
             </View>
           )}
           renderItem={({ item }) => renderRestaurantCard(item)}
-          ListEmptyComponent={
-            <View style={styles.centered}>
-              <Text style={styles.empty}>No restaurants found.</Text>
-            </View>
-          }
         />
+      ) : hasDistanceData && withinRadius.length === 0 ? (
+        <ScrollView
+          contentContainerStyle={styles.centered}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[brand.primary]} />
+          }
+        >
+          <Text style={styles.empty}>No restaurants within {radiusMiles} mi.</Text>
+        </ScrollView>
       ) : (
         <FlatList
           data={restaurants}
@@ -473,18 +452,9 @@ const styles = StyleSheet.create({
   filterChipActive: { backgroundColor: brand.primary },
   filterChipText: { fontSize: 14, color: brand.textPrimary },
   filterChipTextActive: { color: '#fff', fontWeight: '600' },
-  radiusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
-  radiusLabel: { fontSize: 13, color: brand.textSecondary, marginRight: 8 },
-  radiusChips: { flexDirection: 'row', gap: 8 },
-  radiusChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#E5E7EB',
-  },
-  radiusChipActive: { backgroundColor: brand.primary },
-  radiusChipText: { fontSize: 13, color: brand.textPrimary },
-  radiusChipTextActive: { color: '#fff', fontWeight: '600' },
+  radiusRow: { marginTop: 10 },
+  radiusLabel: { fontSize: 13, color: brand.textSecondary, marginBottom: 4 },
+  radiusSlider: { width: '100%', height: 24 },
   favoritesSection: { marginBottom: 16 },
   favoritesSectionTitle: {
     fontSize: 16,
