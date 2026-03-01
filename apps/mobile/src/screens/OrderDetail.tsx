@@ -6,12 +6,16 @@ import {
   StyleSheet,
   ActivityIndicator,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   Alert,
   Linking,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { api } from '../api';
 import { brand } from '../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { OrderStatusTimeline } from '../components/OrderStatusTimeline';
 import { getHoursLabel, type BusinessHoursMap } from '../utils/businessHours';
@@ -48,8 +52,10 @@ const STATUS_LABELS: Record<string, string> = {
 export default function OrderDetail() {
   const route = useRoute<RouteProp<{ params: { orderId: string } }, 'params'>>();
   const orderId = route.params?.orderId;
+  const insets = useSafeAreaInsets();
   const [order, setOrder] = useState<OrderDetailData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [statusModalVisible, setStatusModalVisible] = useState(false);
 
   useEffect(() => {
     if (!orderId) return;
@@ -87,11 +93,15 @@ export default function OrderDetail() {
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Text style={styles.restaurantName}>{order.restaurant?.name}</Text>
-        <View style={styles.statusBadge}>
+        <TouchableOpacity
+          style={styles.statusBadge}
+          onPress={() => setStatusModalVisible(true)}
+          accessibilityLabel="View order status"
+          accessibilityRole="button"
+        >
           <Text style={styles.statusText}>{STATUS_LABELS[order.status] ?? order.status}</Text>
-        </View>
+        </TouchableOpacity>
       </View>
-      <OrderStatusTimeline currentStatus={order.status} />
       <Text style={styles.meta}>
         Order #{order.id.slice(-6)} · ${Number(order.totalPrice).toFixed(2)} · {order.deliveryType}
       </Text>
@@ -201,6 +211,40 @@ export default function OrderDetail() {
         <Text style={styles.totalLabel}>Total</Text>
         <Text style={styles.totalValue}>${Number(order.totalPrice).toFixed(2)}</Text>
       </View>
+
+      <Modal
+        visible={statusModalVisible}
+        animationType="slide"
+        transparent
+        accessibilityLabel="Order status"
+      >
+        <Pressable
+          style={[styles.modalBackdrop, { paddingTop: insets.top }]}
+          onPress={() => setStatusModalVisible(false)}
+          accessibilityLabel="Close order status"
+          accessibilityRole="button"
+        >
+          <TouchableWithoutFeedback>
+            <View
+              style={[
+                styles.modalPanel,
+                { paddingBottom: insets.bottom + 16 },
+              ]}
+            >
+            <Text style={styles.modalTitle}>Order status</Text>
+            <OrderStatusTimeline currentStatus={order.status} variant="vertical" />
+            <TouchableOpacity
+              style={styles.modalDoneBtn}
+              onPress={() => setStatusModalVisible(false)}
+              accessibilityLabel="Done"
+              accessibilityRole="button"
+            >
+              <Text style={styles.modalDoneBtnText}>Done</Text>
+            </TouchableOpacity>
+            </View>
+          </TouchableWithoutFeedback>
+        </Pressable>
+      </Modal>
     </ScrollView>
     </View>
   );
@@ -241,4 +285,34 @@ const styles = StyleSheet.create({
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E5E7EB' },
   totalLabel: { fontSize: 18, fontWeight: '600', color: brand.textPrimary },
   totalValue: { fontSize: 20, fontWeight: '700', color: brand.primary },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalPanel: {
+    backgroundColor: brand.background,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: brand.textPrimary,
+    marginBottom: 16,
+  },
+  modalDoneBtn: {
+    backgroundColor: brand.primary,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 24,
+    alignItems: 'center',
+  },
+  modalDoneBtnText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 16,
+  },
 });
