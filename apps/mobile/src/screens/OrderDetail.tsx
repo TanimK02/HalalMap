@@ -13,6 +13,7 @@ import { useRoute, type RouteProp } from '@react-navigation/native';
 import { api } from '../api';
 import { brand } from '../theme';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { OrderStatusTimeline } from '../components/OrderStatusTimeline';
 import { getHoursLabel, type BusinessHoursMap } from '../utils/businessHours';
 import { getDirectionsUrl } from '../utils/directions';
 
@@ -90,6 +91,7 @@ export default function OrderDetail() {
           <Text style={styles.statusText}>{STATUS_LABELS[order.status] ?? order.status}</Text>
         </View>
       </View>
+      <OrderStatusTimeline currentStatus={order.status} />
       <Text style={styles.meta}>
         Order #{order.id.slice(-6)} · ${Number(order.totalPrice).toFixed(2)} · {order.deliveryType}
       </Text>
