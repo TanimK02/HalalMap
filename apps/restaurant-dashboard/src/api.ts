@@ -24,6 +24,9 @@ api.interceptors.response.use(
   }
 );
 
+export type DayHours = { open?: string; close?: string };
+export type BusinessHoursMap = Record<string, DayHours>;
+
 export type Restaurant = {
   id: string;
   name: string;
@@ -34,7 +37,7 @@ export type Restaurant = {
   certificateUrl: string | null;
   certificateExpiresAt: string | null;
   approved: boolean;
-  businessHours: Record<string, unknown> | null;
+  businessHours: BusinessHoursMap | null;
   offersPickup: boolean;
   offersDelivery: boolean;
   pickupFeeType: string | null;
