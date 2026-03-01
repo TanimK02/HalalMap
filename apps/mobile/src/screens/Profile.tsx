@@ -19,6 +19,7 @@ export default function Profile() {
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
 
   function load() {
     api
@@ -37,6 +38,24 @@ export default function Profile() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Log out', style: 'destructive', onPress: () => logout() },
     ]);
+  }
+
+  async function handleSetDefault(addr: Address) {
+    if (settingDefaultId) return;
+    setSettingDefaultId(addr.id);
+    try {
+      await api.patch(`/users/addresses/${addr.id}`, { isDefault: true });
+      load();
+    } catch (e: unknown) {
+      const message = e && typeof e === 'object' && 'response' in e
+        ? (e as { response?: { status?: number } }).response?.status === 404
+          ? 'Address not found.'
+          : 'Could not set default address.'
+        : 'Could not set default address.';
+      Alert.alert('Error', message);
+    } finally {
+      setSettingDefaultId(null);
+    }
   }
 
   if (loading) {
@@ -62,8 +81,20 @@ export default function Profile() {
               {addr.label ? `${addr.label}: ` : ''}
               {addr.street}, {addr.city} {addr.state ? ` ${addr.state}` : ''} {addr.postalCode}
             </Text>
-            {addr.isDefault && (
+            {addr.isDefault ? (
               <Text style={styles.defaultBadge}>Default</Text>
+            ) : (
+              <TouchableOpacity
+                style={styles.setDefaultLink}
+                onPress={() => handleSetDefault(addr)}
+                disabled={settingDefaultId === addr.id}
+              >
+                {settingDefaultId === addr.id ? (
+                  <ActivityIndicator size="small" color={brand.primary} />
+                ) : (
+                  <Text style={styles.setDefaultLinkText}>Set as default</Text>
+                )}
+              </TouchableOpacity>
             )}
           </View>
         ))}
@@ -105,6 +136,8 @@ const styles = StyleSheet.create({
   },
   addressText: { fontSize: 14, color: brand.textPrimary },
   defaultBadge: { fontSize: 12, color: brand.primary, marginTop: 4 },
+  setDefaultLink: { marginTop: 4, alignSelf: 'flex-start', minHeight: 24, justifyContent: 'center' },
+  setDefaultLinkText: { fontSize: 12, color: brand.primary, fontWeight: '500' },
   addBtn: { padding: 12, borderWidth: 1, borderColor: brand.primary, borderRadius: 8, alignItems: 'center' },
   addBtnText: { color: brand.primary, fontWeight: '600' },
   logoutBtn: { marginTop: 24, padding: 14, backgroundColor: '#fef2f2', borderRadius: 8, alignItems: 'center' },
