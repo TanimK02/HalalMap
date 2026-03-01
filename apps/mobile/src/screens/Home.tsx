@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,15 +11,138 @@ import {
   TextInput,
   RefreshControl,
   Alert,
+  PanResponder,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useFavorites } from '../context/FavoritesContext';
+import { Ionicons } from '@expo/vector-icons';
 import { brand, halalBadgeStyles, HALAL_LABELS, hoursStatusColors } from '../theme';
-import Slider from '@react-native-community/slider';
 import { getHoursLabel, getHoursStatus, type BusinessHoursMap } from '../utils/businessHours';
+
+const SLIDER_THUMB_SIZE = 24;
+const SLIDER_TRACK_HEIGHT = 8;
+
+function CustomSlider({
+  value,
+  min,
+  max,
+  step,
+  onValueChange,
+  onSlidingComplete,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onValueChange: (v: number) => void;
+  onSlidingComplete: (v: number) => void;
+}) {
+  const trackRef = useRef<View>(null);
+  const layoutRef = useRef({ x: 0, width: 1 });
+  const lastValueRef = useRef(value);
+  const [trackWidth, setTrackWidth] = useState(1);
+  const [liveValue, setLiveValue] = useState<number | null>(null);
+  useEffect(() => {
+    lastValueRef.current = value;
+  }, [value]);
+
+  const clamp = useCallback((v: number) => Math.max(min, Math.min(max, v)), [min, max]);
+  const clampAndRound = useCallback(
+    (v: number) => Math.max(min, Math.min(max, Math.round(v / step) * step)),
+    [min, max, step]
+  );
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        trackRef.current?.measureInWindow((x, _y, width) => {
+          layoutRef.current = { x, width };
+          const pageX = evt.nativeEvent.pageX ?? 0;
+          const ratio = (pageX - x) / width;
+          const raw = clamp(min + ratio * (max - min));
+          setLiveValue(raw);
+          const rounded = clampAndRound(raw);
+          lastValueRef.current = rounded;
+          onValueChange(rounded);
+        });
+      },
+      onPanResponderMove: (evt) => {
+        const { x, width } = layoutRef.current;
+        const pageX = evt.nativeEvent.pageX ?? 0;
+        const ratio = (pageX - x) / width;
+        const raw = clamp(min + ratio * (max - min));
+        setLiveValue(raw);
+        const rounded = clampAndRound(raw);
+        lastValueRef.current = rounded;
+        onValueChange(rounded);
+      },
+      onPanResponderRelease: () => {
+        const rounded = lastValueRef.current;
+        onSlidingComplete(rounded);
+        setLiveValue(null);
+      },
+    })
+  ).current;
+
+  const range = max - min;
+  const displayValue = liveValue !== null ? liveValue : value;
+  const ratio = range > 0 ? (displayValue - min) / range : 0;
+  const thumbLeft = ratio * Math.max(0, trackWidth - SLIDER_THUMB_SIZE);
+
+  return (
+    <View
+      style={customSliderStyles.container}
+      ref={trackRef}
+      onLayout={(e) => {
+        const { width } = e.nativeEvent.layout;
+        layoutRef.current.width = width;
+        setTrackWidth(width);
+      }}
+      {...panResponder.panHandlers}
+    >
+      <View style={customSliderStyles.track}>
+        <View style={[customSliderStyles.filledTrack, { width: `${ratio * 100}%` }]} />
+      </View>
+      <View style={[customSliderStyles.thumb, { left: thumbLeft }]} />
+    </View>
+  );
+}
+
+const customSliderStyles = StyleSheet.create({
+  container: {
+    width: '100%',
+    height: 40,
+    justifyContent: 'center',
+  },
+  track: {
+    height: SLIDER_TRACK_HEIGHT,
+    borderRadius: SLIDER_TRACK_HEIGHT / 2,
+    backgroundColor: '#E5E7EB',
+    overflow: 'visible',
+  },
+  filledTrack: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    height: SLIDER_TRACK_HEIGHT,
+    borderRadius: SLIDER_TRACK_HEIGHT / 2,
+    backgroundColor: brand.primary,
+  },
+  thumb: {
+    position: 'absolute',
+    width: SLIDER_THUMB_SIZE,
+    height: SLIDER_THUMB_SIZE,
+    borderRadius: SLIDER_THUMB_SIZE / 2,
+    backgroundColor: brand.primary,
+    top: (40 - SLIDER_THUMB_SIZE) / 2,
+    marginLeft: -SLIDER_THUMB_SIZE / 2,
+  },
+});
 
 type Restaurant = {
   id: string;
@@ -54,8 +177,14 @@ export default function Home() {
   const [manualAddress, setManualAddress] = useState('');
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [radiusMiles, setRadiusMiles] = useState(5);
+  const [distanceFilterExpanded, setDistanceFilterExpanded] = useState(false);
+  const [sliderValue, setSliderValue] = useState(5);
   const RADIUS_MIN = 1;
   const RADIUS_MAX = 50;
+
+  useEffect(() => {
+    if (distanceFilterExpanded) setSliderValue(radiusMiles);
+  }, [distanceFilterExpanded, radiusMiles]);
 
   const resolveLocation = useCallback(async () => {
     setLocationResolving(true);
@@ -67,7 +196,7 @@ export default function Home() {
         setLocationResolving(false);
         return;
       }
-    } catch (_) {}
+    } catch (_) { }
 
     try {
       const { data } = await api.get<Address[]>('/users/addresses');
@@ -334,20 +463,44 @@ export default function Home() {
           contentContainerStyle={styles.filterList}
         />
         {hasDistanceData && (
-          <View style={styles.radiusRow}>
-            <Text style={styles.radiusLabel}>Within: {radiusMiles} mi</Text>
-            <Slider
-              style={styles.radiusSlider}
-              value={radiusMiles}
-              minimumValue={RADIUS_MIN}
-              maximumValue={RADIUS_MAX}
-              step={1}
-              onValueChange={(v: number) => setRadiusMiles(Math.round(v))}
-              minimumTrackTintColor={brand.primary}
-              maximumTrackTintColor="#E5E7EB"
-              thumbTintColor={brand.primary}
-            />
-          </View>
+          <>
+            <TouchableOpacity
+              style={[
+                styles.distanceButton,
+                distanceFilterExpanded && styles.distanceButtonActive,
+              ]}
+              onPress={() => setDistanceFilterExpanded((prev) => !prev)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="car-outline"
+                size={18}
+                color={distanceFilterExpanded ? '#fff' : brand.textPrimary}
+                style={styles.distanceButtonIcon}
+              />
+              <Text
+                style={[
+                  styles.distanceButtonText,
+                  distanceFilterExpanded && styles.distanceButtonTextActive,
+                ]}
+              >
+                {radiusMiles} mi
+              </Text>
+            </TouchableOpacity>
+            {distanceFilterExpanded && (
+              <View style={styles.radiusRow}>
+                <Text style={styles.radiusLabel}>Within: {sliderValue} mi</Text>
+                <CustomSlider
+                  value={sliderValue}
+                  min={RADIUS_MIN}
+                  max={RADIUS_MAX}
+                  step={1}
+                  onValueChange={(v: number) => setSliderValue(v)}
+                  onSlidingComplete={(v: number) => setRadiusMiles(v)}
+                />
+              </View>
+            )}
+          </>
         )}
       </View>
       {loading ? (
@@ -364,11 +517,7 @@ export default function Home() {
           }
           contentContainerStyle={styles.list}
           stickySectionHeadersEnabled={false}
-          renderSectionHeader={({ section: { title } }) => (
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionHeaderText}>{title}</Text>
-            </View>
-          )}
+          renderSectionHeader={() => null}
           renderItem={({ item }) => renderRestaurantCard(item)}
         />
       ) : hasDistanceData && withinRadius.length === 0 ? (
@@ -450,6 +599,26 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   filterChipActive: { backgroundColor: brand.primary },
+  distanceButton: {
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#d1d5db',
+    backgroundColor: brand.surface,
+    gap: 2,
+  },
+  distanceButtonActive: {
+    borderColor: brand.primary,
+    backgroundColor: brand.primary,
+  },
+  distanceButtonIcon: { marginRight: 2 },
+  distanceButtonText: { fontSize: 14, fontWeight: '600', color: brand.textPrimary },
+  distanceButtonTextActive: { color: '#fff' },
   filterChipText: { fontSize: 14, color: brand.textPrimary },
   filterChipTextActive: { color: '#fff', fontWeight: '600' },
   radiusRow: { marginTop: 10 },
