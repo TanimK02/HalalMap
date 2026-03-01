@@ -16,8 +16,8 @@ import * as Location from 'expo-location';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useFavorites } from '../context/FavoritesContext';
-import { brand, halalBadgeStyles, HALAL_LABELS } from '../theme';
-import { getHoursLabel, type BusinessHoursMap } from '../utils/businessHours';
+import { brand, halalBadgeStyles, HALAL_LABELS, hoursStatusColors } from '../theme';
+import { getHoursLabel, getHoursStatus, type BusinessHoursMap } from '../utils/businessHours';
 
 type Restaurant = {
   id: string;
@@ -253,18 +253,24 @@ export default function Home() {
         ) : null}
         {(() => {
           const hours = getHoursLabel(item.businessHours);
-          if (!hours.primary && !hours.todayLine) return null;
+          if (!hours.primary) return null;
+          const status = getHoursStatus(item.businessHours).status;
+          const isOpen = status === 'open';
           return (
-            <View style={styles.cardHours}>
-              {hours.primary ? (
-                <Text style={styles.cardHoursPrimary}>{hours.primary}</Text>
-              ) : null}
-              {hours.secondary ? (
-                <Text style={styles.cardHoursSecondary}> · {hours.secondary}</Text>
-              ) : null}
-              {hours.todayLine ? (
-                <Text style={styles.cardHoursToday}>{hours.todayLine}</Text>
-              ) : null}
+            <View
+              style={[
+                styles.cardHoursPill,
+                isOpen ? styles.cardHoursPillOpen : styles.cardHoursPillClosed,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.cardHoursPillText,
+                  isOpen ? styles.cardHoursPillTextOpen : styles.cardHoursPillTextClosed,
+                ]}
+              >
+                {hours.primary}
+              </Text>
             </View>
           );
         })()}
@@ -530,10 +536,18 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   badgeText: { fontSize: 12, fontWeight: '600' },
   cardDesc: { fontSize: 14, color: brand.textSecondary, marginBottom: 4 },
-  cardHours: { marginBottom: 4 },
-  cardHoursPrimary: { fontSize: 13, fontWeight: '600', color: brand.primary },
-  cardHoursSecondary: { fontSize: 12, color: brand.textSecondary },
-  cardHoursToday: { fontSize: 12, color: brand.textSecondary },
+  cardHoursPill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    marginBottom: 4,
+  },
+  cardHoursPillOpen: { backgroundColor: hoursStatusColors.open.bg },
+  cardHoursPillClosed: { backgroundColor: hoursStatusColors.closed.bg },
+  cardHoursPillText: { fontSize: 13, fontWeight: '600' },
+  cardHoursPillTextOpen: { color: hoursStatusColors.open.text },
+  cardHoursPillTextClosed: { color: hoursStatusColors.closed.text },
   cardAddress: { fontSize: 13, color: brand.textSecondary, marginBottom: 6 },
   cardMeta: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   meta: { fontSize: 12, color: brand.primary },

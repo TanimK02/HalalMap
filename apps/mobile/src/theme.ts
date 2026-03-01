@@ -23,3 +23,9 @@ export const HALAL_LABELS: Record<string, string> = {
   PROCLAIMED_HALAL: 'Proclaimed Halal',
   SOME_HALAL: 'Some Halal',
 };
+
+/** Colors for open/closed status on list cards (DoorDash-style). */
+export const hoursStatusColors = {
+  open: { bg: '#D1FAE5', text: '#065F46' },
+  closed: { bg: '#FEE2E2', text: '#991B1B' },
+};
