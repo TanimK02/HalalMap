@@ -1,6 +1,18 @@
 import { useEffect, useState } from 'react';
 import { api, type Restaurant, type MenuItem } from '../api';
 
+/** Restrict input to price format: digits, optional decimal, max 2 decimal places (e.g. 12, 12.99, 12.1, 12.10). */
+function formatPriceInput(value: string): string {
+  let s = value.replace(/[^\d.]/g, '');
+  const parts = s.split('.');
+  if (parts.length > 2) {
+    s = parts[0] + '.' + parts.slice(1).join('').slice(0, 2);
+  } else if (parts.length === 2 && parts[1].length > 2) {
+    s = parts[0] + '.' + parts[1].slice(0, 2);
+  }
+  return s;
+}
+
 export default function Menu() {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [loading, setLoading] = useState(true);
@@ -9,6 +21,7 @@ export default function Menu() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newItem, setNewItem] = useState<Partial<MenuItem> & { categoryId?: string }>({});
   const [editImageUrl, setEditImageUrl] = useState('');
+  const [editItemForm, setEditItemForm] = useState<{ name: string; description: string; price: string; imageUrl: string }>({ name: '', description: '', price: '', imageUrl: '' });
 
   function load() {
     api
@@ -55,12 +68,13 @@ export default function Menu() {
 
   async function addItem(categoryId: string) {
     const { name, description, price, imageUrl, availableForPickup, availableForDelivery } = newItem;
-    if (!name?.trim() || price == null || price < 0) return;
+    const priceNum = price === undefined || price === '' ? null : Number(price);
+    if (!name?.trim() || priceNum == null || Number.isNaN(priceNum) || priceNum < 0) return;
     try {
       await api.post(`/restaurants/me/restaurant/categories/${categoryId}/items`, {
         name: name.trim(),
         description: description?.trim() || undefined,
-        price: Number(price),
+        price: priceNum,
         imageUrl: imageUrl?.trim() || undefined,
         isAvailable: true,
         availableForPickup: availableForPickup !== false,
@@ -79,15 +93,40 @@ export default function Menu() {
       await api.patch(`/restaurants/me/restaurant/items/${id}`, data);
       setEditingItem(null);
       setEditImageUrl('');
+      setEditItemForm({ name: '', description: '', price: '', imageUrl: '' });
       load();
     } catch (e) {
       console.error(e);
     }
   }
 
+  function saveEditItem(item: MenuItem) {
+    const priceStr = editItemForm.price.trim();
+    const priceNum = priceStr === '' ? null : Number(priceStr);
+    if (priceNum != null && (Number.isNaN(priceNum) || priceNum < 0)) return;
+    updateItem(item.id, {
+      ...(editItemForm.name.trim() && { name: editItemForm.name.trim() }),
+      ...(editItemForm.description !== undefined && { description: editItemForm.description.trim() || null }),
+      ...(priceNum != null && { price: priceNum }),
+      ...(editItemForm.imageUrl !== undefined && { imageUrl: editItemForm.imageUrl.trim() || null }),
+    });
+  }
+
   function startEditingItem(item: MenuItem) {
-    setEditingItem(editingItem === item.id ? null : item.id);
-    setEditImageUrl(editingItem === item.id ? '' : (item.imageUrl ?? ''));
+    if (editingItem === item.id) {
+      setEditingItem(null);
+      setEditImageUrl('');
+      setEditItemForm({ name: '', description: '', price: '', imageUrl: '' });
+    } else {
+      setEditingItem(item.id);
+      setEditImageUrl(item.imageUrl ?? '');
+      setEditItemForm({
+        name: item.name ?? '',
+        description: item.description ?? '',
+        price: Number(item.price) != null ? String(Number(item.price)) : '',
+        imageUrl: item.imageUrl ?? '',
+      });
+    }
   }
 
   async function deleteItem(id: string) {
@@ -253,24 +292,45 @@ export default function Menu() {
                 </div>
                 {editingItem === item.id && (
                   <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-2">
-                    <label className="text-xs text-text-secondary">Image URL:</label>
+                    <input
+                      type="text"
+                      value={editItemForm.name}
+                      onChange={(e) => setEditItemForm((f) => ({ ...f, name: e.target.value }))}
+                      placeholder="Item name"
+                      className="min-w-[120px] rounded border border-gray-300 px-2 py-1 text-sm"
+                    />
+                    <input
+                      type="text"
+                      value={editItemForm.description}
+                      onChange={(e) => setEditItemForm((f) => ({ ...f, description: e.target.value }))}
+                      placeholder="Description"
+                      className="min-w-[120px] flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+                    />
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={editItemForm.price}
+                      onChange={(e) => setEditItemForm((f) => ({ ...f, price: formatPriceInput(e.target.value) }))}
+                      placeholder="Price"
+                      className="w-20 rounded border border-gray-300 px-2 py-1 text-sm"
+                    />
                     <input
                       type="url"
-                      value={editImageUrl}
-                      onChange={(e) => setEditImageUrl(e.target.value)}
-                      placeholder="https://..."
+                      value={editItemForm.imageUrl}
+                      onChange={(e) => setEditItemForm((f) => ({ ...f, imageUrl: e.target.value }))}
+                      placeholder="Image URL"
                       className="min-w-[180px] flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
                     />
                     <button
                       type="button"
-                      onClick={() => updateItem(item.id, { imageUrl: editImageUrl.trim() || null })}
+                      onClick={() => saveEditItem(item)}
                       className="rounded bg-primary px-3 py-1 text-sm text-white"
                     >
                       Save
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setEditingItem(null); setEditImageUrl(''); }}
+                      onClick={() => { setEditingItem(null); setEditImageUrl(''); setEditItemForm({ name: '', description: '', price: '', imageUrl: '' }); }}
                       className="text-sm text-text-secondary"
                     >
                       Cancel
@@ -298,12 +358,11 @@ export default function Menu() {
                 className="rounded border border-gray-300 px-2 py-1"
               />
               <input
-                type="number"
-                step="0.01"
-                min="0"
+                type="text"
+                inputMode="decimal"
                 placeholder="Price"
                 value={newItem.price ?? ''}
-                onChange={(e) => setNewItem((n) => ({ ...n, price: e.target.value ? Number(e.target.value) : undefined }))}
+                onChange={(e) => setNewItem((n) => ({ ...n, price: formatPriceInput(e.target.value) || undefined }))}
                 className="w-20 rounded border border-gray-300 px-2 py-1"
               />
               <input
