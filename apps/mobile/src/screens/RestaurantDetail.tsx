@@ -8,7 +8,9 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  Image,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { api } from '../api';
 import { useCart } from '../context/CartContext';
@@ -48,6 +50,72 @@ type RestaurantDetailData = {
 };
 
 type RouteParams = { restaurantId: string; name: string };
+
+const THUMB_SIZE = 72;
+
+function MenuItemRow({
+  item,
+  categoryName,
+  canAdd,
+  onAdd,
+}: {
+  item: MenuCategory['items'][0];
+  categoryName: string;
+  canAdd: boolean;
+  onAdd: () => void;
+}) {
+  const [imageError, setImageError] = useState(false);
+  const showImage = item.imageUrl && !imageError;
+
+  return (
+    <View style={styles.itemRow}>
+      <View style={styles.itemThumbWrap}>
+        {showImage ? (
+          <Image
+            source={{ uri: item.imageUrl! }}
+            style={styles.itemThumb}
+            resizeMode="cover"
+            onError={() => setImageError(true)}
+            accessibilityLabel={`Photo of ${item.name}`}
+          />
+        ) : (
+          <View
+            style={styles.itemThumbPlaceholder}
+            accessibilityLabel={`No photo for ${item.name}`}
+          >
+            <Ionicons name="restaurant-outline" size={THUMB_SIZE * 0.4} color={brand.textSecondary} />
+            <Text style={styles.itemThumbPlaceholderText} numberOfLines={1}>
+              No image
+            </Text>
+          </View>
+        )}
+      </View>
+      <View style={styles.itemInfo}>
+        <Text style={styles.itemName}>{item.name}</Text>
+        {item.description ? (
+          <Text style={styles.itemDesc} numberOfLines={2}>
+            {item.description}
+          </Text>
+        ) : null}
+        {(item.availableForPickup && item.availableForDelivery === false) ? (
+          <Text style={styles.availabilityNote}>Pickup only</Text>
+        ) : (item.availableForDelivery && item.availableForPickup === false) ? (
+          <Text style={styles.availabilityNote}>Delivery only</Text>
+        ) : null}
+        <Text style={styles.itemPrice}>${Number(item.price).toFixed(2)}</Text>
+      </View>
+      <TouchableOpacity
+        style={[styles.addBtn, (!item.isAvailable || !canAdd) && styles.addBtnDisabled]}
+        onPress={onAdd}
+        disabled={!item.isAvailable || !canAdd}
+      >
+        <Text style={styles.addBtnText}>
+          {!item.isAvailable ? 'Unavailable' : canAdd ? 'Add' : 'Not available'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 export default function RestaurantDetail() {
   const navigation = useNavigation();
@@ -242,40 +310,15 @@ export default function RestaurantDetail() {
         {data.menuCategories.map((cat) => (
           <View key={cat.id} style={styles.section}>
             <Text style={styles.sectionTitle}>{cat.name}</Text>
-            {(cat.items ?? []).map((item) => {
-              const available = item.isAvailable && canAddForDeliveryType(item);
-              const pickupOnly = item.availableForPickup && item.availableForDelivery === false;
-              const deliveryOnly = item.availableForDelivery && item.availableForPickup === false;
-              const availabilityNote = pickupOnly ? 'Pickup only' : deliveryOnly ? 'Delivery only' : null;
-              return (
-                <View key={item.id} style={styles.itemRow}>
-                  <View style={styles.itemInfo}>
-                    <Text style={styles.itemName}>{item.name}</Text>
-                    {item.description ? (
-                      <Text style={styles.itemDesc} numberOfLines={2}>
-                        {item.description}
-                      </Text>
-                    ) : null}
-                    {availabilityNote ? (
-                      <Text style={styles.availabilityNote}>{availabilityNote}</Text>
-                    ) : null}
-                    <Text style={styles.itemPrice}>${Number(item.price).toFixed(2)}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[
-                      styles.addBtn,
-                      (!item.isAvailable || !available) && styles.addBtnDisabled,
-                    ]}
-                    onPress={() => handleAddItem(item, cat.name)}
-                    disabled={!item.isAvailable || !available}
-                  >
-                    <Text style={styles.addBtnText}>
-                      {!item.isAvailable ? 'Unavailable' : available ? 'Add' : 'Not available'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
+            {(cat.items ?? []).map((item) => (
+              <MenuItemRow
+                key={item.id}
+                item={item}
+                categoryName={cat.name}
+                canAdd={item.isAvailable && canAddForDeliveryType(item)}
+                onAdd={() => handleAddItem(item, cat.name)}
+              />
+            ))}
           </View>
         ))}
       </ScrollView>
@@ -330,13 +373,35 @@ const styles = StyleSheet.create({
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: brand.surface,
     borderRadius: 10,
     padding: 12,
     marginBottom: 8,
+    gap: 12,
   },
-  itemInfo: { flex: 1 },
+  itemThumbWrap: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  itemThumb: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+  },
+  itemThumbPlaceholder: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    backgroundColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  itemThumbPlaceholderText: {
+    fontSize: 10,
+    color: brand.textSecondary,
+    marginTop: 2,
+  },
+  itemInfo: { flex: 1, minWidth: 0 },
   itemName: { fontSize: 16, fontWeight: '600', color: brand.textPrimary },
   itemDesc: { fontSize: 13, color: brand.textSecondary, marginTop: 4 },
   availabilityNote: { fontSize: 12, color: brand.textSecondary, marginTop: 2, fontStyle: 'italic' },

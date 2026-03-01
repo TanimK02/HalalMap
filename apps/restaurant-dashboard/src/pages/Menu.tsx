@@ -8,6 +8,7 @@ export default function Menu() {
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newItem, setNewItem] = useState<Partial<MenuItem> & { categoryId?: string }>({});
+  const [editImageUrl, setEditImageUrl] = useState('');
 
   function load() {
     api
@@ -53,13 +54,14 @@ export default function Menu() {
   }
 
   async function addItem(categoryId: string) {
-    const { name, description, price, availableForPickup, availableForDelivery } = newItem;
+    const { name, description, price, imageUrl, availableForPickup, availableForDelivery } = newItem;
     if (!name?.trim() || price == null || price < 0) return;
     try {
       await api.post(`/restaurants/me/restaurant/categories/${categoryId}/items`, {
         name: name.trim(),
         description: description?.trim() || undefined,
         price: Number(price),
+        imageUrl: imageUrl?.trim() || undefined,
         isAvailable: true,
         availableForPickup: availableForPickup !== false,
         availableForDelivery: availableForDelivery !== false,
@@ -76,10 +78,16 @@ export default function Menu() {
     try {
       await api.patch(`/restaurants/me/restaurant/items/${id}`, data);
       setEditingItem(null);
+      setEditImageUrl('');
       load();
     } catch (e) {
       console.error(e);
     }
+  }
+
+  function startEditingItem(item: MenuItem) {
+    setEditingItem(editingItem === item.id ? null : item.id);
+    setEditImageUrl(editingItem === item.id ? '' : (item.imageUrl ?? ''));
   }
 
   async function deleteItem(id: string) {
@@ -169,65 +177,106 @@ export default function Menu() {
 
           <ul className="space-y-2">
             {(cat.items ?? []).map((item) => (
-              <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded bg-background px-3 py-2">
-                <div>
-                  <span className="font-medium">{item.name}</span>
-                  {item.description && (
-                    <span className="ml-2 text-sm text-text-secondary">— {item.description}</span>
-                  )}
-                  <span className="ml-2 text-sm font-medium text-primary">${Number(item.price).toFixed(2)}</span>
-                  {!item.isAvailable && (
-                    <span className="ml-2 rounded bg-gray-200 px-1.5 py-0.5 text-xs">Unavailable</span>
-                  )}
-                  {(item.availableForPickup === false || item.availableForDelivery === false) && (
-                    <span className="ml-2 text-xs text-text-secondary">
-                      {item.availableForPickup === false && item.availableForDelivery === false
-                        ? '—'
-                        : item.availableForPickup === false
-                          ? 'Delivery only'
-                          : 'Pickup only'}
-                    </span>
-                  )}
+              <li key={item.id} className="rounded bg-background px-3 py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    {item.imageUrl ? (
+                      <img
+                        src={item.imageUrl}
+                        alt=""
+                        className="h-12 w-12 shrink-0 rounded object-cover"
+                      />
+                    ) : (
+                      <div className="h-12 w-12 shrink-0 rounded bg-gray-200 flex items-center justify-center text-gray-400 text-xs" aria-hidden>
+                        No img
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <span className="font-medium">{item.name}</span>
+                      {item.description && (
+                        <span className="ml-2 text-sm text-text-secondary">— {item.description}</span>
+                      )}
+                      <span className="ml-2 text-sm font-medium text-primary">${Number(item.price).toFixed(2)}</span>
+                      {!item.isAvailable && (
+                        <span className="ml-2 rounded bg-gray-200 px-1.5 py-0.5 text-xs">Unavailable</span>
+                      )}
+                      {(item.availableForPickup === false || item.availableForDelivery === false) && (
+                        <span className="ml-2 text-xs text-text-secondary">
+                          {item.availableForPickup === false && item.availableForDelivery === false
+                            ? '—'
+                            : item.availableForPickup === false
+                              ? 'Delivery only'
+                              : 'Pickup only'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="flex items-center gap-1 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={item.availableForPickup !== false}
+                        onChange={() => updateItem(item.id, { availableForPickup: !item.availableForPickup })}
+                      />
+                      Pickup
+                    </label>
+                    <label className="flex items-center gap-1 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={item.availableForDelivery !== false}
+                        onChange={() => updateItem(item.id, { availableForDelivery: !item.availableForDelivery })}
+                      />
+                      Delivery
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => startEditingItem(item)}
+                      className="text-sm text-primary hover:underline"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateItem(item.id, { isAvailable: !item.isAvailable })}
+                      className="text-sm text-text-secondary hover:underline"
+                    >
+                      {item.isAvailable ? 'Mark unavailable' : 'Mark available'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteItem(item.id)}
+                      className="text-sm text-red-600 hover:underline"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="flex items-center gap-1 text-xs">
+                {editingItem === item.id && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-2">
+                    <label className="text-xs text-text-secondary">Image URL:</label>
                     <input
-                      type="checkbox"
-                      checked={item.availableForPickup !== false}
-                      onChange={() => updateItem(item.id, { availableForPickup: !item.availableForPickup })}
+                      type="url"
+                      value={editImageUrl}
+                      onChange={(e) => setEditImageUrl(e.target.value)}
+                      placeholder="https://..."
+                      className="min-w-[180px] flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
                     />
-                    Pickup
-                  </label>
-                  <label className="flex items-center gap-1 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={item.availableForDelivery !== false}
-                      onChange={() => updateItem(item.id, { availableForDelivery: !item.availableForDelivery })}
-                    />
-                    Delivery
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setEditingItem(editingItem === item.id ? null : item.id)}
-                    className="text-sm text-primary hover:underline"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateItem(item.id, { isAvailable: !item.isAvailable })}
-                    className="text-sm text-text-secondary hover:underline"
-                  >
-                    {item.isAvailable ? 'Mark unavailable' : 'Mark available'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => deleteItem(item.id)}
-                    className="text-sm text-red-600 hover:underline"
-                  >
-                    Delete
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => updateItem(item.id, { imageUrl: editImageUrl.trim() || null })}
+                      className="rounded bg-primary px-3 py-1 text-sm text-white"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setEditingItem(null); setEditImageUrl(''); }}
+                      className="text-sm text-text-secondary"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -256,6 +305,13 @@ export default function Menu() {
                 value={newItem.price ?? ''}
                 onChange={(e) => setNewItem((n) => ({ ...n, price: e.target.value ? Number(e.target.value) : undefined }))}
                 className="w-20 rounded border border-gray-300 px-2 py-1"
+              />
+              <input
+                type="url"
+                placeholder="Image URL (optional)"
+                value={newItem.imageUrl ?? ''}
+                onChange={(e) => setNewItem((n) => ({ ...n, imageUrl: e.target.value || undefined }))}
+                className="min-w-[200px] flex-1 rounded border border-gray-300 px-2 py-1"
               />
               <label className="flex items-center gap-1 text-sm">
                 <input
