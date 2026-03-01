@@ -3,6 +3,7 @@ import {
   View,
   Text,
   FlatList,
+  SectionList,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
@@ -46,6 +47,8 @@ export default function Home() {
   const [locationResolving, setLocationResolving] = useState(true);
   const [manualAddress, setManualAddress] = useState('');
   const [manualSubmitting, setManualSubmitting] = useState(false);
+  const [radiusMiles, setRadiusMiles] = useState(5);
+  const RADIUS_OPTIONS = [5, 10, 25];
 
   const resolveLocation = useCallback(async () => {
     setLocationResolving(true);
@@ -87,7 +90,14 @@ export default function Home() {
     }
     return api
       .get<Restaurant[]>('/restaurants', { params })
-      .then((r) => setRestaurants(r.data))
+      .then((r) => {
+        const list = r.data ?? [];
+        const hasDistance = list.some((x) => x.distanceMiles != null);
+        const sorted = hasDistance
+          ? [...list].sort((a, b) => (a.distanceMiles ?? 999) - (b.distanceMiles ?? 999))
+          : list;
+        setRestaurants(sorted);
+      })
       .catch(() => setRestaurants([]))
       .finally(() => {
         setLoading(false);
@@ -132,6 +142,106 @@ export default function Home() {
   }
 
   const badgeStyle = (status: string) => halalBadgeStyles[status] ?? { bg: '#E5E7EB', text: '#1F2933' };
+
+  const hasDistanceData = restaurants.length > 0 && restaurants.some((r) => r.distanceMiles != null);
+
+  function buildSections(): { title: string; data: Restaurant[] }[] {
+    if (!hasDistanceData) return [];
+    const r = radiusMiles;
+    const bounds = r === 5 ? [5, 10] : r === 10 ? [10, 25] : [25];
+    const sections: { title: string; data: Restaurant[] }[] = [];
+    if (bounds.length === 2) {
+      sections.push({
+        title: `Within ${bounds[0]} mi`,
+        data: restaurants.filter((x) => (x.distanceMiles ?? 0) < bounds[0]),
+      });
+      sections.push({
+        title: `${bounds[0]}–${bounds[1]} mi`,
+        data: restaurants.filter(
+          (x) => (x.distanceMiles ?? 0) >= bounds[0] && (x.distanceMiles ?? 0) < bounds[1]
+        ),
+      });
+      sections.push({
+        title: `${bounds[1]}+ mi`,
+        data: restaurants.filter((x) => (x.distanceMiles ?? 0) >= bounds[1]),
+      });
+    } else {
+      sections.push({
+        title: `Within ${bounds[0]} mi`,
+        data: restaurants.filter((x) => (x.distanceMiles ?? 0) < bounds[0]),
+      });
+      sections.push({
+        title: `${bounds[0]}+ mi`,
+        data: restaurants.filter((x) => (x.distanceMiles ?? 0) >= bounds[0]),
+      });
+    }
+    return sections.filter((s) => s.data.length > 0);
+  }
+
+  const sections = buildSections();
+
+  function renderRestaurantCard(item: Restaurant) {
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() =>
+          (navigation as { navigate: (s: string, p: object) => void }).navigate(
+            'RestaurantDetail',
+            { restaurantId: item.id, name: item.name }
+          )
+        }
+        activeOpacity={0.7}
+      >
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>{item.name}</Text>
+          <View style={styles.badgeRow}>
+            {(item.halalStatuses ?? []).map((status) => {
+              const style = badgeStyle(status);
+              return (
+                <View key={status} style={[styles.badge, { backgroundColor: style.bg }]}>
+                  <Text style={[styles.badgeText, { color: style.text }]}>
+                    {HALAL_LABELS[status] ?? status}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+        {item.description ? (
+          <Text style={styles.cardDesc} numberOfLines={2}>
+            {item.description}
+          </Text>
+        ) : null}
+        {(() => {
+          const hours = getHoursLabel(item.businessHours);
+          if (!hours.primary && !hours.todayLine) return null;
+          return (
+            <View style={styles.cardHours}>
+              {hours.primary ? (
+                <Text style={styles.cardHoursPrimary}>{hours.primary}</Text>
+              ) : null}
+              {hours.secondary ? (
+                <Text style={styles.cardHoursSecondary}> · {hours.secondary}</Text>
+              ) : null}
+              {hours.todayLine ? (
+                <Text style={styles.cardHoursToday}>{hours.todayLine}</Text>
+              ) : null}
+            </View>
+          );
+        })()}
+        <Text style={styles.cardAddress} numberOfLines={1}>
+          {item.address}
+        </Text>
+        <View style={styles.cardMeta}>
+          {item.distanceMiles != null && (
+            <Text style={styles.meta}>{Number(item.distanceMiles).toFixed(1)} mi away</Text>
+          )}
+          {item.offersPickup && <Text style={styles.meta}>Pickup</Text>}
+          {item.offersDelivery && <Text style={styles.meta}>Delivery</Text>}
+        </View>
+      </TouchableOpacity>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -199,11 +309,52 @@ export default function Home() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterList}
         />
+        {hasDistanceData && (
+          <View style={styles.radiusRow}>
+            <Text style={styles.radiusLabel}>Within: </Text>
+            <View style={styles.radiusChips}>
+              {RADIUS_OPTIONS.map((mi) => (
+                <TouchableOpacity
+                  key={mi}
+                  style={[styles.radiusChip, radiusMiles === mi && styles.radiusChipActive]}
+                  onPress={() => setRadiusMiles(mi)}
+                >
+                  <Text
+                    style={[styles.radiusChipText, radiusMiles === mi && styles.radiusChipTextActive]}
+                  >
+                    {mi} mi
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
       </View>
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={brand.primary} />
         </View>
+      ) : hasDistanceData && sections.length > 0 ? (
+        <SectionList
+          sections={sections}
+          keyExtractor={(item) => item.id}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[brand.primary]} />
+          }
+          contentContainerStyle={styles.list}
+          stickySectionHeadersEnabled={false}
+          renderSectionHeader={({ section: { title } }) => (
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionHeaderText}>{title}</Text>
+            </View>
+          )}
+          renderItem={({ item }) => renderRestaurantCard(item)}
+          ListEmptyComponent={
+            <View style={styles.centered}>
+              <Text style={styles.empty}>No restaurants found.</Text>
+            </View>
+          }
+        />
       ) : (
         <FlatList
           data={restaurants}
@@ -212,70 +363,7 @@ export default function Home() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[brand.primary]} />
           }
           contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.card}
-              onPress={() =>
-                (navigation as { navigate: (s: string, p: object) => void }).navigate(
-                  'RestaurantDetail',
-                  { restaurantId: item.id, name: item.name }
-                )
-              }
-              activeOpacity={0.7}
-            >
-              <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>{item.name}</Text>
-                <View style={styles.badgeRow}>
-                  {(item.halalStatuses ?? []).map((status) => {
-                    const style = badgeStyle(status);
-                    return (
-                      <View key={status} style={[styles.badge, { backgroundColor: style.bg }]}>
-                        <Text style={[styles.badgeText, { color: style.text }]}>
-                          {HALAL_LABELS[status] ?? status}
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-              {item.description ? (
-                <Text style={styles.cardDesc} numberOfLines={2}>
-                  {item.description}
-                </Text>
-              ) : null}
-              {(() => {
-                const hours = getHoursLabel(item.businessHours);
-                if (!hours.primary && !hours.todayLine) return null;
-                return (
-                  <View style={styles.cardHours}>
-                    {hours.primary ? (
-                      <Text style={styles.cardHoursPrimary}>{hours.primary}</Text>
-                    ) : null}
-                    {hours.secondary ? (
-                      <Text style={styles.cardHoursSecondary}> · {hours.secondary}</Text>
-                    ) : null}
-                    {hours.todayLine ? (
-                      <Text style={styles.cardHoursToday}>{hours.todayLine}</Text>
-                    ) : null}
-                  </View>
-                );
-              })()}
-              <Text style={styles.cardAddress} numberOfLines={1}>
-                {item.address}
-              </Text>
-              <View style={styles.cardMeta}>
-                {item.distanceMiles != null && (
-                  <Text style={styles.meta}>{Number(item.distanceMiles).toFixed(1)} mi away</Text>
-                )}
-                {item.offersPickup && (
-                  <Text style={styles.meta}>Pickup</Text>
-                )}
-                {item.offersDelivery && (
-                  <Text style={styles.meta}>Delivery</Text>
-                )}
-              </View>
-            </TouchableOpacity>
-          )}
+          renderItem={({ item }) => renderRestaurantCard(item)}
           ListEmptyComponent={
             <View style={styles.centered}>
               <Text style={styles.empty}>No restaurants found.</Text>
@@ -338,6 +426,28 @@ const styles = StyleSheet.create({
   filterChipActive: { backgroundColor: brand.primary },
   filterChipText: { fontSize: 14, color: brand.textPrimary },
   filterChipTextActive: { color: '#fff', fontWeight: '600' },
+  radiusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+  radiusLabel: { fontSize: 13, color: brand.textSecondary, marginRight: 8 },
+  radiusChips: { flexDirection: 'row', gap: 8 },
+  radiusChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#E5E7EB',
+  },
+  radiusChipActive: { backgroundColor: brand.primary },
+  radiusChipText: { fontSize: 13, color: brand.textPrimary },
+  radiusChipTextActive: { color: '#fff', fontWeight: '600' },
+  sectionHeader: {
+    paddingVertical: 8,
+    paddingTop: 16,
+    paddingBottom: 4,
+  },
+  sectionHeaderText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: brand.primary,
+  },
   list: { padding: 16, paddingBottom: 32 },
   card: {
     backgroundColor: brand.surface,
