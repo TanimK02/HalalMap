@@ -72,6 +72,7 @@ restaurantsRouter.get(
       certificateExpiresAt: true,
       offersPickup: true,
       offersDelivery: true,
+      businessHours: true,
       ...(useLocation ? { latitude: true, longitude: true } : {}),
     };
 

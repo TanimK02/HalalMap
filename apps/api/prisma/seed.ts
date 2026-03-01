@@ -33,6 +33,15 @@ async function main() {
     where: { ownerId: owner.id },
   });
   const seedCoords = { latitude: 37.7749, longitude: -122.4194 };
+  const seedBusinessHours = {
+    mon: { open: '09:00', close: '21:00' },
+    tue: { open: '09:00', close: '21:00' },
+    wed: { open: '09:00', close: '21:00' },
+    thu: { open: '09:00', close: '21:00' },
+    fri: { open: '09:00', close: '21:00' },
+    sat: { open: '09:00', close: '21:00' },
+    sun: { open: '09:00', close: '21:00' },
+  };
   if (!restaurant) {
     restaurant = await prisma.restaurant.create({
       data: {
@@ -44,6 +53,7 @@ async function main() {
         ...seedCoords,
         halalStatuses: ['CERTIFIED_HALAL'],
         approved: true,
+        businessHours: seedBusinessHours,
         offersPickup: true,
         offersDelivery: true,
         pickupFeeType: null,
@@ -52,11 +62,21 @@ async function main() {
         deliveryFeeValue: null,
       },
     });
-  } else if (restaurant.latitude == null || restaurant.longitude == null) {
-    restaurant = await prisma.restaurant.update({
-      where: { id: restaurant.id },
-      data: seedCoords,
-    });
+  } else {
+    const updates: { latitude?: number; longitude?: number; businessHours?: object } = {};
+    if (restaurant.latitude == null || restaurant.longitude == null) {
+      updates.latitude = seedCoords.latitude;
+      updates.longitude = seedCoords.longitude;
+    }
+    if (restaurant.businessHours == null) {
+      updates.businessHours = seedBusinessHours;
+    }
+    if (Object.keys(updates).length > 0) {
+      restaurant = await prisma.restaurant.update({
+        where: { id: restaurant.id },
+        data: updates,
+      });
+    }
   }
 
   const categoryCount = await prisma.menuCategory.count({

@@ -1,9 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  ActivityIndicator,
+  TouchableOpacity,
+  Alert,
+  Linking,
+} from 'react-native';
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { api } from '../api';
 import { brand } from '../theme';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { getHoursLabel, type BusinessHoursMap } from '../utils/businessHours';
+import { getDirectionsUrl } from '../utils/directions';
 
 type OrderDetailData = {
   id: string;
@@ -12,7 +23,14 @@ type OrderDetailData = {
   feeCents?: number;
   deliveryType: string;
   createdAt: string;
-  restaurant: { name: string; address: string };
+  restaurant: {
+    name: string;
+    address: string;
+    phone?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    businessHours?: BusinessHoursMap;
+  };
   items: { quantity: number; menuItem: { name: string }; priceAtOrder: number | string }[];
   deliveryAddress?: { street: string; city: string; postalCode: string } | null;
 };
@@ -76,6 +94,74 @@ export default function OrderDetail() {
         Order #{order.id.slice(-6)} · ${Number(order.totalPrice).toFixed(2)} · {order.deliveryType}
       </Text>
       <Text style={styles.meta}>{new Date(order.createdAt).toLocaleString()}</Text>
+      {order.deliveryType === 'PICKUP' && order.restaurant && (() => {
+        const hours = getHoursLabel(order.restaurant.businessHours);
+        if (!hours.primary && !hours.todayLine) return null;
+        return (
+          <View style={styles.hoursBlock}>
+            {hours.primary ? (
+              <Text style={styles.hoursPrimary}>{hours.primary}</Text>
+            ) : null}
+            {hours.secondary ? (
+              <Text style={styles.hoursSecondary}>{hours.secondary}</Text>
+            ) : null}
+            {hours.todayLine ? (
+              <Text style={styles.hoursToday}>{hours.todayLine}</Text>
+            ) : null}
+          </View>
+        );
+      })()}
+      {order.deliveryType === 'PICKUP' && order.restaurant?.address ? (
+        <Text style={styles.restaurantAddress}>{order.restaurant.address}</Text>
+      ) : null}
+      {order.restaurant && (() => {
+        const r = order.restaurant;
+        const hasPhone = r.phone != null && String(r.phone).trim() !== '';
+        const directionsUrl = getDirectionsUrl(r.latitude, r.longitude, r.address);
+        const isPickup = order.deliveryType === 'PICKUP';
+        const showCall = hasPhone;
+        const showDirections = isPickup && directionsUrl;
+        if (!showCall && !showDirections) return null;
+        return (
+          <View style={styles.callDirectionsRow}>
+            {showCall ? (
+              <TouchableOpacity
+                style={styles.callDirectionsBtn}
+                onPress={async () => {
+                  try {
+                    const url = `tel:${String(r.phone).trim()}`;
+                    const can = await Linking.canOpenURL(url);
+                    if (can) await Linking.openURL(url);
+                    else Alert.alert('Unable to open', 'This device cannot place calls.');
+                  } catch {
+                    Alert.alert('Error', "Couldn't open phone dialer.");
+                  }
+                }}
+                accessibilityLabel="Call restaurant"
+              >
+                <Text style={styles.callDirectionsBtnText}>Call</Text>
+              </TouchableOpacity>
+            ) : null}
+            {showDirections ? (
+              <TouchableOpacity
+                style={styles.callDirectionsBtn}
+                onPress={async () => {
+                  try {
+                    const can = await Linking.canOpenURL(directionsUrl);
+                    if (can) await Linking.openURL(directionsUrl!);
+                    else Alert.alert('Unable to open', "Couldn't open Maps.");
+                  } catch {
+                    Alert.alert('Error', "Couldn't open Maps.");
+                  }
+                }}
+                accessibilityLabel="Open directions in Maps"
+              >
+                <Text style={styles.callDirectionsBtnText}>Directions</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        );
+      })()}
       {order.deliveryAddress && (
         <Text style={styles.address}>
           Delivery: {order.deliveryAddress.street}, {order.deliveryAddress.city}{' '}
@@ -129,6 +215,19 @@ const styles = StyleSheet.create({
   statusBadge: { backgroundColor: brand.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   statusText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   meta: { fontSize: 14, color: brand.textSecondary, marginBottom: 4 },
+  hoursBlock: { marginBottom: 12 },
+  hoursPrimary: { fontSize: 14, fontWeight: '600', color: brand.primary },
+  hoursSecondary: { fontSize: 14, color: brand.textSecondary },
+  hoursToday: { fontSize: 14, color: brand.textSecondary, marginTop: 2 },
+  restaurantAddress: { fontSize: 14, color: brand.textSecondary, marginBottom: 8 },
+  callDirectionsRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  callDirectionsBtn: {
+    backgroundColor: brand.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  callDirectionsBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   address: { fontSize: 14, color: brand.textSecondary, marginBottom: 20 },
   sectionTitle: { fontSize: 18, fontWeight: '600', color: brand.textPrimary, marginBottom: 12 },
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },

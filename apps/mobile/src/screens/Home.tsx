@@ -14,6 +14,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { api } from '../api';
 import { brand, halalBadgeStyles, HALAL_LABELS } from '../theme';
+import { getHoursLabel, type BusinessHoursMap } from '../utils/businessHours';
 
 type Restaurant = {
   id: string;
@@ -21,6 +22,7 @@ type Restaurant = {
   description: string | null;
   address: string;
   halalStatuses: string[];
+  businessHours?: BusinessHoursMap;
   offersPickup: boolean;
   offersDelivery: boolean;
   distanceMiles?: number;
@@ -241,6 +243,23 @@ export default function Home() {
                   {item.description}
                 </Text>
               ) : null}
+              {(() => {
+                const hours = getHoursLabel(item.businessHours);
+                if (!hours.primary && !hours.todayLine) return null;
+                return (
+                  <View style={styles.cardHours}>
+                    {hours.primary ? (
+                      <Text style={styles.cardHoursPrimary}>{hours.primary}</Text>
+                    ) : null}
+                    {hours.secondary ? (
+                      <Text style={styles.cardHoursSecondary}> · {hours.secondary}</Text>
+                    ) : null}
+                    {hours.todayLine ? (
+                      <Text style={styles.cardHoursToday}>{hours.todayLine}</Text>
+                    ) : null}
+                  </View>
+                );
+              })()}
               <Text style={styles.cardAddress} numberOfLines={1}>
                 {item.address}
               </Text>
@@ -342,6 +361,10 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   badgeText: { fontSize: 12, fontWeight: '600' },
   cardDesc: { fontSize: 14, color: brand.textSecondary, marginBottom: 4 },
+  cardHours: { marginBottom: 4 },
+  cardHoursPrimary: { fontSize: 13, fontWeight: '600', color: brand.primary },
+  cardHoursSecondary: { fontSize: 12, color: brand.textSecondary },
+  cardHoursToday: { fontSize: 12, color: brand.textSecondary },
   cardAddress: { fontSize: 13, color: brand.textSecondary, marginBottom: 6 },
   cardMeta: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   meta: { fontSize: 12, color: brand.primary },

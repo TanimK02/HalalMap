@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { api } from '../api';
@@ -14,6 +15,8 @@ import { useCart } from '../context/CartContext';
 import { ViewCartBar } from '../components/ViewCartBar';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { brand, halalBadgeStyles, HALAL_LABELS } from '../theme';
+import { getHoursLabel, type BusinessHoursMap } from '../utils/businessHours';
+import { getDirectionsUrl } from '../utils/directions';
 
 type MenuCategory = {
   id: string;
@@ -36,7 +39,11 @@ type RestaurantDetailData = {
   name: string;
   description: string | null;
   address: string;
+  phone: string | null;
+  latitude: number | null;
+  longitude: number | null;
   halalStatuses: string[];
+  businessHours?: BusinessHoursMap;
   menuCategories: MenuCategory[];
 };
 
@@ -149,7 +156,66 @@ export default function RestaurantDetail() {
         {data.description ? (
           <Text style={styles.desc}>{data.description}</Text>
         ) : null}
+        {(() => {
+          const hours = getHoursLabel(data.businessHours);
+          if (!hours.primary && !hours.todayLine) return null;
+          return (
+            <View style={styles.hoursBlock}>
+              {hours.primary ? (
+                <View style={styles.hoursRow}>
+                  <Text style={styles.hoursPrimary}>{hours.primary}</Text>
+                  {hours.secondary ? (
+                    <Text style={styles.hoursSecondary}> · {hours.secondary}</Text>
+                  ) : null}
+                </View>
+              ) : null}
+              {hours.todayLine ? (
+                <Text style={styles.hoursToday}>{hours.todayLine}</Text>
+              ) : null}
+            </View>
+          );
+        })()}
         <Text style={styles.address}>{data.address}</Text>
+
+        <View style={styles.callDirectionsRow}>
+          {data.phone != null && data.phone.trim() !== '' ? (
+            <TouchableOpacity
+              style={styles.callDirectionsBtn}
+              onPress={async () => {
+                try {
+                  const url = `tel:${data.phone!.trim()}`;
+                  const can = await Linking.canOpenURL(url);
+                  if (can) await Linking.openURL(url);
+                  else Alert.alert('Unable to open', 'This device cannot place calls.');
+                } catch {
+                  Alert.alert('Error', "Couldn't open phone dialer.");
+                }
+              }}
+              accessibilityLabel="Call restaurant"
+            >
+              <Text style={styles.callDirectionsBtnText}>Call</Text>
+            </TouchableOpacity>
+          ) : null}
+          {getDirectionsUrl(data.latitude, data.longitude, data.address) ? (
+            <TouchableOpacity
+              style={styles.callDirectionsBtn}
+              onPress={async () => {
+                try {
+                  const url = getDirectionsUrl(data.latitude, data.longitude, data.address);
+                  if (!url) return;
+                  const can = await Linking.canOpenURL(url);
+                  if (can) await Linking.openURL(url);
+                  else Alert.alert('Unable to open', "Couldn't open Maps.");
+                } catch {
+                  Alert.alert('Error', "Couldn't open Maps.");
+                }
+              }}
+              accessibilityLabel="Open directions in Maps"
+            >
+              <Text style={styles.callDirectionsBtnText}>Directions</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
 
         <View style={styles.deliveryTypeRow}>
           <Text style={styles.deliveryTypeLabel}>Order for:</Text>
@@ -232,7 +298,20 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
   badgeText: { fontSize: 13, fontWeight: '600' },
   desc: { fontSize: 14, color: brand.textSecondary, marginBottom: 6 },
-  address: { fontSize: 13, color: brand.textSecondary, marginBottom: 20 },
+  hoursBlock: { marginBottom: 12 },
+  hoursRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
+  hoursPrimary: { fontSize: 15, color: brand.primary, fontWeight: '600' },
+  hoursSecondary: { fontSize: 14, color: brand.textSecondary },
+  hoursToday: { fontSize: 14, color: brand.textSecondary, marginTop: 4 },
+  address: { fontSize: 13, color: brand.textSecondary, marginBottom: 12 },
+  callDirectionsRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  callDirectionsBtn: {
+    backgroundColor: brand.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  callDirectionsBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   deliveryTypeRow: { marginBottom: 16 },
   deliveryTypeLabel: { fontSize: 14, fontWeight: '600', color: brand.textPrimary, marginBottom: 8 },
   deliveryTypeButtons: { flexDirection: 'row', gap: 10 },
