@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,46 +6,35 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import axios from 'axios';
-import { useStripe } from '@stripe/stripe-react-native';
 import { api } from '../api';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { useCheckout } from '../hooks/useCheckout';
 import { brand } from '../theme';
-import { AddressForm } from '../components/AddressForm';
+import { DeliveryAddressSection } from '../components/DeliveryAddressSection';
 import type { Address } from '../types/address';
-
-type FeeStructure =
-  | { type: 'flat'; valueCents: number }
-  | { type: 'percent'; valuePercent: number };
-
-type RestaurantFees = {
-  pickupFee: FeeStructure;
-  deliveryFee: FeeStructure;
-};
-
-function computeFeeCents(subtotalCents: number, fee: FeeStructure): number {
-  if (fee.type === 'flat') return fee.valueCents;
-  return Math.round((subtotalCents * fee.valuePercent) / 100);
-}
+import type { FeeStructure, RestaurantFees } from '../types/fees';
+import { computeFeeCents } from '../utils/fees';
 
 export default function Cart() {
   const navigation = useNavigation();
-  const { initPaymentSheet, presentPaymentSheet } = useStripe();
-  const { items, restaurantId, restaurantName, total, removeItem, clearCart } = useCart();
+  const { items, restaurantId, restaurantName, total, removeItem } = useCart();
   const { token } = useAuth();
   const [deliveryType, setDeliveryType] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
   const [deliveryAddressId, setDeliveryAddressId] = useState<string | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [restaurantFees, setRestaurantFees] = useState<RestaurantFees | null>(null);
-  const [loading, setLoading] = useState(false);
   const [loadingAddresses, setLoadingAddresses] = useState(false);
   const [showAddAddressForm, setShowAddAddressForm] = useState(false);
   const [showAddressList, setShowAddressList] = useState(false);
+
+  const { handleCheckout, loading: checkoutLoading } = useCheckout(
+    deliveryType,
+    deliveryAddressId
+  );
 
   const subtotal = total;
   const subtotalCents = Math.round(subtotal * 100);
@@ -56,18 +45,22 @@ export default function Cart() {
   const feeCents = feeStructure ? computeFeeCents(subtotalCents, feeStructure) : 0;
   const totalWithFee = (subtotalCents + feeCents) / 100;
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (restaurantId && items.length > 0) {
       api
-        .get<{ pickupFee: FeeStructure; deliveryFee: FeeStructure }>(`/restaurants/${restaurantId}`)
-        .then((r) => setRestaurantFees({ pickupFee: r.data.pickupFee, deliveryFee: r.data.deliveryFee }))
+        .get<{ pickupFee: FeeStructure; deliveryFee: FeeStructure }>(
+          `/restaurants/${restaurantId}`
+        )
+        .then((r) =>
+          setRestaurantFees({ pickupFee: r.data.pickupFee, deliveryFee: r.data.deliveryFee })
+        )
         .catch(() => setRestaurantFees(null));
     } else {
       setRestaurantFees(null);
     }
   }, [restaurantId, items.length]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (deliveryType === 'DELIVERY' && token) {
       setLoadingAddresses(true);
       api
@@ -86,112 +79,6 @@ export default function Cart() {
     }
   }, [deliveryType, token]);
 
-  async function fetchOrderByPaymentIntentId(
-    paymentIntentId: string,
-    retries = 2
-  ): Promise<{ id: string } | null> {
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      try {
-        const { data } = await api.get<{ id: string }>(
-          `/orders/by-payment-intent/${paymentIntentId}`
-        );
-        return data;
-      } catch (e) {
-        if (axios.isAxiosError(e) && e.response?.status === 404 && attempt < retries) {
-          await new Promise((r) => setTimeout(r, 800));
-          continue;
-        }
-        return null;
-      }
-    }
-    return null;
-  }
-
-  async function handleCheckout() {
-    if (!restaurantId || items.length === 0) return;
-    if (deliveryType === 'DELIVERY' && !deliveryAddressId) {
-      Alert.alert('Address required', 'Please select a delivery address.');
-      return;
-    }
-    setLoading(true);
-    try {
-      const payload = {
-        restaurantId,
-        deliveryType,
-        deliveryAddressId: deliveryType === 'DELIVERY' ? deliveryAddressId : undefined,
-        items: items.map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity })),
-      };
-      const { data } = await api.post<
-        | { order: { id: string }; clientSecret: null }
-        | { clientSecret: string; paymentIntentId: string }
-      >('/orders', payload);
-
-      if ('order' in data && data.clientSecret === null) {
-        clearCart();
-        (navigation as { navigate: (s: string, p: object) => void }).navigate('OrderDetail', {
-          orderId: data.order.id,
-        });
-        setLoading(false);
-        return;
-      }
-
-      const { clientSecret, paymentIntentId } = data;
-
-      const { error: initError } = await initPaymentSheet({
-        paymentIntentClientSecret: clientSecret,
-        merchantDisplayName: restaurantName ?? 'Halal Map',
-        returnURL: 'halalmap://stripe-redirect',
-      });
-      if (initError) {
-        Alert.alert('Payment setup failed', initError.message ?? 'Could not open payment form.');
-        setLoading(false);
-        return;
-      }
-
-      const { error: presentError } = await presentPaymentSheet();
-      if (presentError) {
-        if (presentError.code !== 'Canceled') {
-          Alert.alert('Payment failed', presentError.message ?? 'Payment was not completed.');
-        }
-        setLoading(false);
-        return;
-      }
-
-      // Create order from payment intent (works when webhook has not run, e.g. local dev)
-      let order: { id: string } | null = null;
-      try {
-        const { data: orderData } = await api.post<{ id: string }>('/orders/from-payment-intent', {
-          paymentIntentId,
-        });
-        order = orderData;
-      } catch {
-        // Webhook may have created it; fall back to polling
-        order = await fetchOrderByPaymentIntentId(paymentIntentId);
-      }
-      if (!order) {
-        Alert.alert(
-          'Order is being created',
-          'Check My Orders in a moment. Your payment was successful.'
-        );
-        clearCart();
-        setLoading(false);
-        return;
-      }
-      clearCart();
-      (navigation as { navigate: (s: string, p: object) => void }).navigate('OrderDetail', {
-        orderId: order.id,
-      });
-    } catch (err) {
-      const msg =
-        axios.isAxiosError(err) && err.response?.data?.error
-          ? err.response.data.error
-          : 'Checkout failed';
-      Alert.alert('Error', String(msg));
-    } finally {
-      setLoading(false);
-    }
-  }
-
   if (items.length === 0) {
     return (
       <View style={styles.centered}>
@@ -199,11 +86,15 @@ export default function Cart() {
         <TouchableOpacity
           style={styles.backBtn}
           onPress={() => {
-            // When Cart is opened from tab bar, goBack() does nothing. Navigate to Home instead.
-            const nav = navigation as { getParent?: () => { navigate: (a: string, b?: object) => void } | null; goBack: () => void };
+            const nav = navigation as {
+              getParent?: () => { navigate: (a: string, b?: object) => void } | null;
+              goBack: () => void;
+            };
             const parent = nav.getParent?.();
             if (parent) {
-              (parent as { navigate: (a: string, b?: object) => void }).navigate('Main', { screen: 'HomeTab' });
+              (parent as { navigate: (a: string, b?: object) => void }).navigate('Main', {
+                screen: 'HomeTab',
+              });
             } else {
               nav.goBack();
             }
@@ -262,84 +153,22 @@ export default function Cart() {
         </View>
       </View>
       {deliveryType === 'DELIVERY' && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Delivery address</Text>
-          {loadingAddresses ? (
-            <ActivityIndicator color={brand.primary} />
-          ) : showAddAddressForm ? (
-            <AddressForm
-              onSaved={(addr) => {
-                setAddresses((prev) => [...prev, addr]);
-                setDeliveryAddressId(addr.id);
-                setShowAddAddressForm(false);
-                setShowAddressList(false);
-              }}
-              onCancel={() => setShowAddAddressForm(false)}
-              submitLabel="Use this address"
-            />
-          ) : addresses.length === 0 ? (
-            <TouchableOpacity
-              style={styles.addAddressBtn}
-              onPress={() => setShowAddAddressForm(true)}
-            >
-              <Text style={styles.addAddressBtnText}>Add delivery address</Text>
-            </TouchableOpacity>
-          ) : showAddressList ? (
-            <>
-              {addresses.map((addr) => (
-                <TouchableOpacity
-                  key={addr.id}
-                  style={[styles.addressRow, deliveryAddressId === addr.id && styles.addressRowActive]}
-                  onPress={() => {
-                    setDeliveryAddressId(addr.id);
-                    setShowAddressList(false);
-                  }}
-                >
-                  <Text style={styles.addressText}>
-                    {addr.label ?? addr.street}, {addr.city} {addr.postalCode}
-                  </Text>
-                  {addr.isDefault && (
-                    <Text style={styles.defaultBadge}>Default</Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-              <TouchableOpacity
-                style={styles.addNewAddressBtn}
-                onPress={() => setShowAddAddressForm(true)}
-              >
-                <Text style={styles.addNewAddressBtnText}>+ Add new address</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.doneBtn}
-                onPress={() => setShowAddressList(false)}
-              >
-                <Text style={styles.doneBtnText}>Done</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              {(() => {
-                const selected = addresses.find((a) => a.id === deliveryAddressId) ?? addresses[0];
-                return selected ? (
-                  <View style={styles.addressRow}>
-                    <Text style={styles.addressText}>
-                      {selected.label ?? selected.street}, {selected.city} {selected.postalCode}
-                    </Text>
-                    {selected.isDefault && (
-                      <Text style={styles.defaultBadge}>Default</Text>
-                    )}
-                  </View>
-                ) : null;
-              })()}
-              <TouchableOpacity
-                style={styles.changeAddressBtn}
-                onPress={() => setShowAddressList(true)}
-              >
-                <Text style={styles.changeAddressBtnText}>Change address</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
+        <DeliveryAddressSection
+          addresses={addresses}
+          deliveryAddressId={deliveryAddressId}
+          onSelectAddress={setDeliveryAddressId}
+          onDone={() => setShowAddressList(false)}
+          showAddForm={showAddAddressForm}
+          showList={showAddressList}
+          onShowAddForm={setShowAddAddressForm}
+          onShowList={setShowAddressList}
+          loading={loadingAddresses}
+          onSaved={(addr) => {
+            setAddresses((prev) => [...prev, addr]);
+            setDeliveryAddressId(addr.id);
+          }}
+          onCancel={() => setShowAddAddressForm(false)}
+        />
       )}
       {feeCents > 0 && (
         <>
@@ -360,11 +189,13 @@ export default function Cart() {
         <Text style={styles.totalValue}>${totalWithFee.toFixed(2)}</Text>
       </View>
       <TouchableOpacity
-        style={[styles.checkoutBtn, loading && styles.checkoutBtnDisabled]}
+        style={[styles.checkoutBtn, checkoutLoading && styles.checkoutBtnDisabled]}
         onPress={handleCheckout}
-        disabled={loading || (deliveryType === 'DELIVERY' && !deliveryAddressId)}
+        disabled={
+          checkoutLoading || (deliveryType === 'DELIVERY' && !deliveryAddressId)
+        }
       >
-        {loading ? (
+        {checkoutLoading ? (
           <ActivityIndicator color="#fff" />
         ) : (
           <Text style={styles.checkoutBtnText}>Checkout</Text>
@@ -381,7 +212,12 @@ const styles = StyleSheet.create({
   empty: { fontSize: 16, color: brand.textSecondary, marginBottom: 16 },
   backBtn: { padding: 12, backgroundColor: brand.primary, borderRadius: 8 },
   backBtnText: { color: '#fff', fontWeight: '600' },
-  restaurantName: { fontSize: 18, fontWeight: '600', color: brand.textPrimary, marginBottom: 16 },
+  restaurantName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: brand.textPrimary,
+    marginBottom: 16,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -397,7 +233,12 @@ const styles = StyleSheet.create({
   removeBtn: { padding: 8 },
   removeBtnText: { fontSize: 18, color: brand.primary, fontWeight: '700' },
   section: { marginTop: 20 },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: brand.textPrimary, marginBottom: 10 },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: brand.textPrimary,
+    marginBottom: 10,
+  },
   radioRow: { flexDirection: 'row', gap: 12 },
   radio: {
     paddingHorizontal: 16,
@@ -409,50 +250,6 @@ const styles = StyleSheet.create({
   radioActive: { backgroundColor: brand.primary, borderColor: brand.primary },
   radioText: { fontSize: 14, color: brand.textPrimary },
   radioTextActive: { fontSize: 14, color: '#fff', fontWeight: '600' },
-  addAddressBtn: {
-    padding: 12,
-    borderWidth: 1,
-    borderColor: brand.primary,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  addAddressBtnText: { color: brand.primary, fontWeight: '600' },
-  addNewAddressBtn: {
-    padding: 12,
-    borderWidth: 1,
-    borderColor: brand.primary,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  addNewAddressBtnText: { color: brand.primary, fontWeight: '600' },
-  doneBtn: {
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    alignItems: 'center',
-  },
-  doneBtnText: { color: brand.textPrimary, fontWeight: '600' },
-  changeAddressBtn: {
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  changeAddressBtnText: { color: brand.textPrimary, fontWeight: '600' },
-  addressRow: {
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    marginBottom: 8,
-  },
-  addressRowActive: { borderColor: brand.primary, backgroundColor: '#f0fdf4' },
-  addressText: { fontSize: 14, color: brand.textPrimary },
-  defaultBadge: { fontSize: 12, color: brand.primary, marginTop: 4 },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

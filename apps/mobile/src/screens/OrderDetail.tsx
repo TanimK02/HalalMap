@@ -6,53 +6,22 @@ import {
   StyleSheet,
   ActivityIndicator,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   Alert,
   Linking,
-  Modal,
-  Pressable,
 } from 'react-native';
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { api } from '../api';
 import { brand } from '../theme';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { OrderStatusTimeline } from '../components/OrderStatusTimeline';
-import { getHoursLabel, type BusinessHoursMap } from '../utils/businessHours';
+import { OrderStatusModal } from '../components/OrderStatusModal';
+import { getHoursLabel } from '../utils/businessHours';
 import { getDirectionsUrl } from '../utils/directions';
-
-type OrderDetailData = {
-  id: string;
-  status: string;
-  totalPrice: number | string;
-  feeCents?: number;
-  deliveryType: string;
-  createdAt: string;
-  restaurant: {
-    name: string;
-    address: string;
-    phone?: string | null;
-    latitude?: number | null;
-    longitude?: number | null;
-    businessHours?: BusinessHoursMap;
-  };
-  items: { quantity: number; menuItem: { name: string }; priceAtOrder: number | string }[];
-  deliveryAddress?: { street: string; city: string; postalCode: string } | null;
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  PENDING: 'Pending',
-  ACCEPTED: 'Accepted',
-  PREPARING: 'Preparing',
-  READY: 'Ready',
-  COMPLETED: 'Completed',
-  CANCELLED: 'Cancelled',
-};
+import type { OrderDetailData } from '../types/order';
+import { STATUS_LABELS } from '../types/order';
 
 export default function OrderDetail() {
   const route = useRoute<RouteProp<{ params: { orderId: string } }, 'params'>>();
   const orderId = route.params?.orderId;
-  const insets = useSafeAreaInsets();
   const [order, setOrder] = useState<OrderDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [statusModalVisible, setStatusModalVisible] = useState(false);
@@ -91,161 +60,141 @@ export default function OrderDetail() {
     <View style={styles.wrapper}>
       <ScreenHeader title="Order" />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.restaurantName}>{order.restaurant?.name}</Text>
-        <TouchableOpacity
-          style={styles.statusBadge}
-          onPress={() => setStatusModalVisible(true)}
-          accessibilityLabel="View order status"
-          accessibilityRole="button"
-        >
-          <Text style={styles.statusText}>{STATUS_LABELS[order.status] ?? order.status}</Text>
-        </TouchableOpacity>
-      </View>
-      <Text style={styles.meta}>
-        Order #{order.id.slice(-6)} · ${Number(order.totalPrice).toFixed(2)} · {order.deliveryType}
-      </Text>
-      <Text style={styles.meta}>{new Date(order.createdAt).toLocaleString()}</Text>
-      {order.deliveryType === 'PICKUP' && order.restaurant && (() => {
-        const hours = getHoursLabel(order.restaurant.businessHours);
-        if (!hours.primary && !hours.todayLine) return null;
-        return (
-          <View style={styles.hoursBlock}>
-            {hours.primary ? (
-              <Text style={styles.hoursPrimary}>{hours.primary}</Text>
-            ) : null}
-            {hours.secondary ? (
-              <Text style={styles.hoursSecondary}>{hours.secondary}</Text>
-            ) : null}
-            {hours.todayLine ? (
-              <Text style={styles.hoursToday}>{hours.todayLine}</Text>
-            ) : null}
-          </View>
-        );
-      })()}
-      {order.deliveryType === 'PICKUP' && order.restaurant?.address ? (
-        <Text style={styles.restaurantAddress}>{order.restaurant.address}</Text>
-      ) : null}
-      {order.restaurant && (() => {
-        const r = order.restaurant;
-        const hasPhone = r.phone != null && String(r.phone).trim() !== '';
-        const directionsUrl = getDirectionsUrl(r.latitude, r.longitude, r.address);
-        const isPickup = order.deliveryType === 'PICKUP';
-        const showCall = hasPhone;
-        const showDirections = isPickup && directionsUrl;
-        if (!showCall && !showDirections) return null;
-        return (
-          <View style={styles.callDirectionsRow}>
-            {showCall ? (
-              <TouchableOpacity
-                style={styles.callDirectionsBtn}
-                onPress={async () => {
-                  try {
-                    const url = `tel:${String(r.phone).trim()}`;
-                    const can = await Linking.canOpenURL(url);
-                    if (can) await Linking.openURL(url);
-                    else Alert.alert('Unable to open', 'This device cannot place calls.');
-                  } catch {
-                    Alert.alert('Error', "Couldn't open phone dialer.");
-                  }
-                }}
-                accessibilityLabel="Call restaurant"
-              >
-                <Text style={styles.callDirectionsBtnText}>Call</Text>
-              </TouchableOpacity>
-            ) : null}
-            {showDirections ? (
-              <TouchableOpacity
-                style={styles.callDirectionsBtn}
-                onPress={async () => {
-                  try {
-                    const can = await Linking.canOpenURL(directionsUrl);
-                    if (can) await Linking.openURL(directionsUrl!);
-                    else Alert.alert('Unable to open', "Couldn't open Maps.");
-                  } catch {
-                    Alert.alert('Error', "Couldn't open Maps.");
-                  }
-                }}
-                accessibilityLabel="Open directions in Maps"
-              >
-                <Text style={styles.callDirectionsBtnText}>Directions</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        );
-      })()}
-      {order.deliveryAddress && (
-        <Text style={styles.address}>
-          Delivery: {order.deliveryAddress.street}, {order.deliveryAddress.city}{' '}
-          {order.deliveryAddress.postalCode}
-        </Text>
-      )}
-      <Text style={styles.sectionTitle}>Items</Text>
-      {(order.items ?? []).map((line, i) => (
-        <View key={i} style={styles.row}>
-          <Text style={styles.rowName}>
-            {line.quantity}x {line.menuItem?.name}
-          </Text>
-          <Text style={styles.rowPrice}>${Number(line.priceAtOrder).toFixed(2)}</Text>
+        <View style={styles.header}>
+          <Text style={styles.restaurantName}>{order.restaurant?.name}</Text>
+          <TouchableOpacity
+            style={styles.statusBadge}
+            onPress={() => setStatusModalVisible(true)}
+            accessibilityLabel="View order status"
+            accessibilityRole="button"
+          >
+            <Text style={styles.statusText}>
+              {STATUS_LABELS[order.status] ?? order.status}
+            </Text>
+          </TouchableOpacity>
         </View>
-      ))}
-      {(order.feeCents ?? 0) > 0 && (
-        <>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Subtotal</Text>
-            <Text style={styles.summaryValue}>
-              ${(Number(order.totalPrice) - (order.feeCents ?? 0) / 100).toFixed(2)}
+        <Text style={styles.meta}>
+          Order #{order.id.slice(-6)} · ${Number(order.totalPrice).toFixed(2)} ·{' '}
+          {order.deliveryType}
+        </Text>
+        <Text style={styles.meta}>{new Date(order.createdAt).toLocaleString()}</Text>
+        {order.deliveryType === 'PICKUP' &&
+          order.restaurant &&
+          (() => {
+            const hours = getHoursLabel(order.restaurant.businessHours);
+            if (!hours.primary && !hours.todayLine) return null;
+            return (
+              <View style={styles.hoursBlock}>
+                {hours.primary ? (
+                  <Text style={styles.hoursPrimary}>{hours.primary}</Text>
+                ) : null}
+                {hours.secondary ? (
+                  <Text style={styles.hoursSecondary}>{hours.secondary}</Text>
+                ) : null}
+                {hours.todayLine ? (
+                  <Text style={styles.hoursToday}>{hours.todayLine}</Text>
+                ) : null}
+              </View>
+            );
+          })()}
+        {order.deliveryType === 'PICKUP' && order.restaurant?.address ? (
+          <Text style={styles.restaurantAddress}>{order.restaurant.address}</Text>
+        ) : null}
+        {order.restaurant &&
+          (() => {
+            const r = order.restaurant;
+            const hasPhone = r.phone != null && String(r.phone).trim() !== '';
+            const directionsUrl = getDirectionsUrl(r.latitude, r.longitude, r.address);
+            const isPickup = order.deliveryType === 'PICKUP';
+            const showCall = hasPhone;
+            const showDirections = isPickup && directionsUrl;
+            if (!showCall && !showDirections) return null;
+            return (
+              <View style={styles.callDirectionsRow}>
+                {showCall ? (
+                  <TouchableOpacity
+                    style={styles.callDirectionsBtn}
+                    onPress={async () => {
+                      try {
+                        const url = `tel:${String(r.phone).trim()}`;
+                        const can = await Linking.canOpenURL(url);
+                        if (can) await Linking.openURL(url);
+                        else Alert.alert('Unable to open', 'This device cannot place calls.');
+                      } catch {
+                        Alert.alert('Error', "Couldn't open phone dialer.");
+                      }
+                    }}
+                    accessibilityLabel="Call restaurant"
+                  >
+                    <Text style={styles.callDirectionsBtnText}>Call</Text>
+                  </TouchableOpacity>
+                ) : null}
+                {showDirections ? (
+                  <TouchableOpacity
+                    style={styles.callDirectionsBtn}
+                    onPress={async () => {
+                      try {
+                        const can = await Linking.canOpenURL(directionsUrl);
+                        if (can) await Linking.openURL(directionsUrl!);
+                        else Alert.alert('Unable to open', "Couldn't open Maps.");
+                      } catch {
+                        Alert.alert('Error', "Couldn't open Maps.");
+                      }
+                    }}
+                    accessibilityLabel="Open directions in Maps"
+                  >
+                    <Text style={styles.callDirectionsBtnText}>Directions</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            );
+          })()}
+        {order.deliveryAddress && (
+          <Text style={styles.address}>
+            Delivery: {order.deliveryAddress.street}, {order.deliveryAddress.city}{' '}
+            {order.deliveryAddress.postalCode}
+          </Text>
+        )}
+        <Text style={styles.sectionTitle}>Items</Text>
+        {(order.items ?? []).map((line, i) => (
+          <View key={i} style={styles.row}>
+            <Text style={styles.rowName}>
+              {line.quantity}x {line.menuItem?.name}
+            </Text>
+            <Text style={styles.rowPrice}>
+              ${Number(line.priceAtOrder).toFixed(2)}
             </Text>
           </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>
-              {order.deliveryType === 'PICKUP' ? 'Pickup fee' : 'Delivery fee'}
-            </Text>
-            <Text style={styles.summaryValue}>
-              ${((order.feeCents ?? 0) / 100).toFixed(2)}
-            </Text>
-          </View>
-        </>
-      )}
-      <View style={styles.totalRow}>
-        <Text style={styles.totalLabel}>Total</Text>
-        <Text style={styles.totalValue}>${Number(order.totalPrice).toFixed(2)}</Text>
-      </View>
-
-      <Modal
-        visible={statusModalVisible}
-        animationType="slide"
-        transparent
-        accessibilityLabel="Order status"
-      >
-        <Pressable
-          style={[styles.modalBackdrop, { paddingTop: insets.top }]}
-          onPress={() => setStatusModalVisible(false)}
-          accessibilityLabel="Close order status"
-          accessibilityRole="button"
-        >
-          <TouchableWithoutFeedback>
-            <View
-              style={[
-                styles.modalPanel,
-                { paddingBottom: insets.bottom + 16 },
-              ]}
-            >
-            <Text style={styles.modalTitle}>Order status</Text>
-            <OrderStatusTimeline currentStatus={order.status} variant="vertical" />
-            <TouchableOpacity
-              style={styles.modalDoneBtn}
-              onPress={() => setStatusModalVisible(false)}
-              accessibilityLabel="Done"
-              accessibilityRole="button"
-            >
-              <Text style={styles.modalDoneBtnText}>Done</Text>
-            </TouchableOpacity>
+        ))}
+        {(order.feeCents ?? 0) > 0 && (
+          <>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Subtotal</Text>
+              <Text style={styles.summaryValue}>
+                ${(Number(order.totalPrice) - (order.feeCents ?? 0) / 100).toFixed(2)}
+              </Text>
             </View>
-          </TouchableWithoutFeedback>
-        </Pressable>
-      </Modal>
-    </ScrollView>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>
+                {order.deliveryType === 'PICKUP' ? 'Pickup fee' : 'Delivery fee'}
+              </Text>
+              <Text style={styles.summaryValue}>
+                ${((order.feeCents ?? 0) / 100).toFixed(2)}
+              </Text>
+            </View>
+          </>
+        )}
+        <View style={styles.totalRow}>
+          <Text style={styles.totalLabel}>Total</Text>
+          <Text style={styles.totalValue}>${Number(order.totalPrice).toFixed(2)}</Text>
+        </View>
+      </ScrollView>
+
+      <OrderStatusModal
+        visible={statusModalVisible}
+        onClose={() => setStatusModalVisible(false)}
+        status={order.status}
+      />
     </View>
   );
 }
@@ -256,9 +205,19 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 32 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   empty: { fontSize: 16, color: brand.textSecondary },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   restaurantName: { fontSize: 20, fontWeight: '700', color: brand.textPrimary },
-  statusBadge: { backgroundColor: brand.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  statusBadge: {
+    backgroundColor: brand.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
   statusText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   meta: { fontSize: 14, color: brand.textSecondary, marginBottom: 4 },
   hoursBlock: { marginBottom: 12 },
@@ -275,44 +234,32 @@ const styles = StyleSheet.create({
   },
   callDirectionsBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   address: { fontSize: 14, color: brand.textSecondary, marginBottom: 20 },
-  sectionTitle: { fontSize: 18, fontWeight: '600', color: brand.textPrimary, marginBottom: 12 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: brand.textPrimary,
+    marginBottom: 12,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
   rowName: { fontSize: 16, color: brand.textPrimary },
   rowPrice: { fontSize: 16, color: brand.textSecondary },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
   summaryLabel: { fontSize: 14, color: brand.textSecondary },
   summaryValue: { fontSize: 14, color: brand.textPrimary },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E5E7EB' },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
   totalLabel: { fontSize: 18, fontWeight: '600', color: brand.textPrimary },
   totalValue: { fontSize: 20, fontWeight: '700', color: brand.primary },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  modalPanel: {
-    backgroundColor: brand.background,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: brand.textPrimary,
-    marginBottom: 16,
-  },
-  modalDoneBtn: {
-    backgroundColor: brand.primary,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginTop: 24,
-    alignItems: 'center',
-  },
-  modalDoneBtnText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
-  },
 });

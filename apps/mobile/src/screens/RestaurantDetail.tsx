@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
-  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
@@ -18,106 +17,13 @@ import { useFavorites } from '../context/FavoritesContext';
 import { useAuth } from '../context/AuthContext';
 import { ViewCartBar } from '../components/ViewCartBar';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { MenuItemRow } from '../components/MenuItemRow';
 import { brand, halalBadgeStyles, HALAL_LABELS } from '../theme';
-import { getHoursLabel, type BusinessHoursMap } from '../utils/businessHours';
+import { getHoursLabel } from '../utils/businessHours';
 import { getDirectionsUrl } from '../utils/directions';
-
-type MenuCategory = {
-  id: string;
-  name: string;
-  sortOrder: number;
-  items: {
-    id: string;
-    name: string;
-    description: string | null;
-    price: number;
-    imageUrl: string | null;
-    isAvailable: boolean;
-    availableForPickup?: boolean;
-    availableForDelivery?: boolean;
-  }[];
-};
-
-type RestaurantDetailData = {
-  id: string;
-  name: string;
-  description: string | null;
-  address: string;
-  phone: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  halalStatuses: string[];
-  businessHours?: BusinessHoursMap;
-  menuCategories: MenuCategory[];
-};
+import type { RestaurantDetailData } from '../types/restaurant';
 
 type RouteParams = { restaurantId: string; name: string };
-
-const THUMB_SIZE = 72;
-
-function MenuItemRow({
-  item,
-  categoryName,
-  canAdd,
-  onAdd,
-}: {
-  item: MenuCategory['items'][0];
-  categoryName: string;
-  canAdd: boolean;
-  onAdd: () => void;
-}) {
-  const [imageError, setImageError] = useState(false);
-  const showImage = item.imageUrl && !imageError;
-
-  return (
-    <View style={styles.itemRow}>
-      <View style={styles.itemThumbWrap}>
-        {showImage ? (
-          <Image
-            source={{ uri: item.imageUrl! }}
-            style={styles.itemThumb}
-            resizeMode="cover"
-            onError={() => setImageError(true)}
-            accessibilityLabel={`Photo of ${item.name}`}
-          />
-        ) : (
-          <View
-            style={styles.itemThumbPlaceholder}
-            accessibilityLabel={`No photo for ${item.name}`}
-          >
-            <Ionicons name="restaurant-outline" size={THUMB_SIZE * 0.4} color={brand.textSecondary} />
-            <Text style={styles.itemThumbPlaceholderText} numberOfLines={1}>
-              No image
-            </Text>
-          </View>
-        )}
-      </View>
-      <View style={styles.itemInfo}>
-        <Text style={styles.itemName}>{item.name}</Text>
-        {item.description ? (
-          <Text style={styles.itemDesc} numberOfLines={2}>
-            {item.description}
-          </Text>
-        ) : null}
-        {(item.availableForPickup && item.availableForDelivery === false) ? (
-          <Text style={styles.availabilityNote}>Pickup only</Text>
-        ) : (item.availableForDelivery && item.availableForPickup === false) ? (
-          <Text style={styles.availabilityNote}>Delivery only</Text>
-        ) : null}
-        <Text style={styles.itemPrice}>${Number(item.price).toFixed(2)}</Text>
-      </View>
-      <TouchableOpacity
-        style={[styles.addBtn, (!item.isAvailable || !canAdd) && styles.addBtnDisabled]}
-        onPress={onAdd}
-        disabled={!item.isAvailable || !canAdd}
-      >
-        <Text style={styles.addBtnText}>
-          {!item.isAvailable ? 'Unavailable' : canAdd ? 'Add' : 'Not available'}
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
 
 export default function RestaurantDetail() {
   const navigation = useNavigation();
@@ -202,7 +108,8 @@ export default function RestaurantDetail() {
     );
   }
 
-  const badgeStyle = (status: string) => halalBadgeStyles[status] ?? { bg: '#E5E7EB', text: '#1F2933' };
+  const badgeStyle = (status: string) =>
+    halalBadgeStyles[status] ?? { bg: '#E5E7EB', text: '#1F2933' };
 
   return (
     <View style={styles.wrapper}>
@@ -227,7 +134,9 @@ export default function RestaurantDetail() {
                 }
               }}
               disabled={favoriteBusy}
-              accessibilityLabel={isFavorited(data.id) ? 'Remove from favorites' : 'Add to favorites'}
+              accessibilityLabel={
+                isFavorited(data.id) ? 'Remove from favorites' : 'Add to favorites'
+              }
             >
               <Ionicons
                 name={isFavorited(data.id) ? 'heart' : 'heart-outline'}
@@ -338,18 +247,34 @@ export default function RestaurantDetail() {
           <Text style={styles.deliveryTypeLabel}>Order for:</Text>
           <View style={styles.deliveryTypeButtons}>
             <TouchableOpacity
-              style={[styles.deliveryTypeBtn, deliveryType === 'PICKUP' && styles.deliveryTypeBtnActive]}
+              style={[
+                styles.deliveryTypeBtn,
+                deliveryType === 'PICKUP' && styles.deliveryTypeBtnActive,
+              ]}
               onPress={() => setDeliveryType('PICKUP')}
             >
-              <Text style={[styles.deliveryTypeBtnText, deliveryType === 'PICKUP' && styles.deliveryTypeBtnTextActive]}>
+              <Text
+                style={[
+                  styles.deliveryTypeBtnText,
+                  deliveryType === 'PICKUP' && styles.deliveryTypeBtnTextActive,
+                ]}
+              >
                 Pickup
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.deliveryTypeBtn, deliveryType === 'DELIVERY' && styles.deliveryTypeBtnActive]}
+              style={[
+                styles.deliveryTypeBtn,
+                deliveryType === 'DELIVERY' && styles.deliveryTypeBtnActive,
+              ]}
               onPress={() => setDeliveryType('DELIVERY')}
             >
-              <Text style={[styles.deliveryTypeBtnText, deliveryType === 'DELIVERY' && styles.deliveryTypeBtnTextActive]}>
+              <Text
+                style={[
+                  styles.deliveryTypeBtnText,
+                  deliveryType === 'DELIVERY' && styles.deliveryTypeBtnTextActive,
+                ]}
+              >
                 Delivery
               </Text>
             </TouchableOpacity>
@@ -384,7 +309,13 @@ const styles = StyleSheet.create({
   contentWithBar: { paddingBottom: 80 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   empty: { fontSize: 16, color: brand.textSecondary },
-  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 10, flexWrap: 'wrap' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 10,
+    flexWrap: 'wrap',
+  },
   title: { fontSize: 22, fontWeight: '700', color: brand.textPrimary, flex: 1, minWidth: 0 },
   favoriteBtn: { padding: 4, marginLeft: 4 },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
@@ -406,7 +337,12 @@ const styles = StyleSheet.create({
   },
   callDirectionsBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   deliveryTypeRow: { marginBottom: 16 },
-  deliveryTypeLabel: { fontSize: 14, fontWeight: '600', color: brand.textPrimary, marginBottom: 8 },
+  deliveryTypeLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: brand.textPrimary,
+    marginBottom: 8,
+  },
   deliveryTypeButtons: { flexDirection: 'row', gap: 10 },
   deliveryTypeBtn: {
     paddingHorizontal: 16,
@@ -420,48 +356,4 @@ const styles = StyleSheet.create({
   deliveryTypeBtnTextActive: { color: '#fff', fontWeight: '600' },
   section: { marginBottom: 24 },
   sectionTitle: { fontSize: 18, fontWeight: '600', color: brand.textPrimary, marginBottom: 12 },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: brand.surface,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 8,
-    gap: 12,
-  },
-  itemThumbWrap: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  itemThumb: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
-  },
-  itemThumbPlaceholder: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
-    backgroundColor: '#E5E7EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  itemThumbPlaceholderText: {
-    fontSize: 10,
-    color: brand.textSecondary,
-    marginTop: 2,
-  },
-  itemInfo: { flex: 1, minWidth: 0 },
-  itemName: { fontSize: 16, fontWeight: '600', color: brand.textPrimary },
-  itemDesc: { fontSize: 13, color: brand.textSecondary, marginTop: 4 },
-  availabilityNote: { fontSize: 12, color: brand.textSecondary, marginTop: 2, fontStyle: 'italic' },
-  itemPrice: { fontSize: 15, fontWeight: '600', color: brand.primary, marginTop: 4 },
-  addBtn: {
-    backgroundColor: brand.accent,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  addBtnDisabled: { backgroundColor: '#d1d5db', opacity: 0.7 },
-  addBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
 });
