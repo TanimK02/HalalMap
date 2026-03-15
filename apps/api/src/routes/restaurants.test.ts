@@ -139,61 +139,16 @@ describe('GET /restaurants/me/restaurant', () => {
 });
 
 describe('POST /restaurants/me/restaurant', () => {
-  it('returns 401 when no token', async () => {
-    const res = await request(app).post('/restaurants/me/restaurant').send({
-      name: 'R',
-      address: '123 Main',
-      halalStatuses: ['CERTIFIED_HALAL'],
-    });
-    expect(res.status).toBe(401);
-  });
-
-  it('returns 403 when user is CUSTOMER', async () => {
-    const res = await request(app)
-      .post('/restaurants/me/restaurant')
-      .set(auth(validToken))
-      .send({
-        name: 'R',
-        address: '123 Main',
-        halalStatuses: ['CERTIFIED_HALAL'],
-      });
-    expect(res.status).toBe(403);
-  });
-
-  it('returns 400 when validation fails (missing halal status)', async () => {
+  it('returns 404 (only admins can create restaurants via POST /admin/restaurants)', async () => {
     const res = await request(app)
       .post('/restaurants/me/restaurant')
       .set(auth(ownerToken))
       .send({
         name: 'R',
         address: '123 Main',
-        halalStatuses: [],
-      });
-    expect(res.status).toBe(400);
-    expect(res.body.errors).toBeDefined();
-  });
-
-  it('returns 201 with restaurant on success', async () => {
-    (prisma.restaurant.findUnique as jest.Mock).mockResolvedValue(null);
-    (prisma.restaurant.create as jest.Mock).mockResolvedValue({
-      id: 'r1',
-      name: 'New Restaurant',
-      address: '123 Main',
-      halalStatuses: ['CERTIFIED_HALAL'],
-      ownerId: 'owner-1',
-    });
-
-    const res = await request(app)
-      .post('/restaurants/me/restaurant')
-      .set(auth(ownerToken))
-      .send({
-        name: 'New Restaurant',
-        address: '123 Main',
         halalStatuses: ['CERTIFIED_HALAL'],
       });
-
-    expect(res.status).toBe(201);
-    expect(res.body).toMatchObject({ id: 'r1', name: 'New Restaurant' });
+    expect(res.status).toBe(404);
   });
 });
 

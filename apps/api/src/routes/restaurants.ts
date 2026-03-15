@@ -144,58 +144,7 @@ restaurantsRouter.get(
   }
 );
 
-// Owner: create restaurant (one per owner)
-restaurantsRouter.post(
-  '/me/restaurant',
-  requireAuth,
-  requireRole('RESTAURANT_OWNER'),
-  [
-    body('name').trim().notEmpty(),
-    body('description').optional().trim(),
-    body('phone').optional().trim(),
-    body('address').trim().notEmpty(),
-    body('halalStatuses').isArray(),
-    body('halalStatuses').custom((arr) => Array.isArray(arr) && arr.length >= 1).withMessage('At least one halal status required'),
-    body('halalStatuses.*').isIn(HALAL_STATUS_VALUES),
-    body('certificateUrl').optional().trim(),
-    body('certificateExpiresAt').optional().isISO8601(),
-    body('businessHours').optional().isObject(),
-    body('offersPickup').optional().isBoolean(),
-    body('offersDelivery').optional().isBoolean(),
-  ],
-  async (req: AuthRequest, res: Response) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-
-    const existing = await prisma.restaurant.findUnique({
-      where: { ownerId: req.userId! },
-    });
-    if (existing) return res.status(409).json({ error: 'Restaurant already exists for this account' });
-
-    const data = req.body;
-    const coords = await geocode(data.address);
-    const restaurant = await prisma.restaurant.create({
-      data: {
-        ownerId: req.userId!,
-        name: data.name,
-        description: data.description || null,
-        phone: data.phone || null,
-        address: data.address,
-        latitude: coords?.latitude ?? null,
-        longitude: coords?.longitude ?? null,
-        halalStatuses: data.halalStatuses as HalalStatus[],
-        certificateUrl: data.certificateUrl || null,
-        certificateExpiresAt: data.certificateExpiresAt
-          ? new Date(data.certificateExpiresAt)
-          : null,
-        businessHours: data.businessHours || undefined,
-        offersPickup: data.offersPickup ?? true,
-        offersDelivery: data.offersDelivery ?? false,
-      },
-    });
-    return res.status(201).json(restaurant);
-  }
-);
+// Owner cannot create restaurant; only admins do via POST /admin/restaurants.
 
 // Owner: update my restaurant
 restaurantsRouter.patch(
