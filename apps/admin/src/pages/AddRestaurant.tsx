@@ -33,7 +33,7 @@ export default function AddRestaurant() {
   });
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
-    const { name, value, type } = e.target;
+    const { name, value } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
     if (name === 'restaurantOffersPickup' || name === 'restaurantOffersDelivery') {
       setForm((prev) => ({ ...prev, [name]: checked }));
@@ -86,11 +86,11 @@ export default function AddRestaurant() {
         restaurantOffersPickup: true,
         restaurantOffersDelivery: false,
       });
-    } catch (err) {
+    } catch (err: unknown) {
       const msg =
         axios.isAxiosError(err) && err.response?.data?.error
           ? err.response.data.error
-          : err.response?.data?.errors
+          : axios.isAxiosError(err) && err.response?.data?.errors
             ? (err.response.data.errors as { msg?: string }[]).map((e) => e.msg).join(', ')
             : 'Failed to create restaurant.';
       setError(msg);
