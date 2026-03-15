@@ -20,7 +20,11 @@ function getCertificateStatus(certificateExpiresAt: string | null): CertificateS
   expires.setHours(0, 0, 0, 0);
   const daysLeft = Math.ceil((expires.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   if (daysLeft < 0) return { status: 'expired', label: 'Expired' };
-  if (daysLeft <= 30) return { status: 'expiring_soon', label: `Expires in ${daysLeft} days`, days: daysLeft };
+  if (daysLeft <= 30) {
+    const label =
+      daysLeft === 0 ? 'Expires today' : daysLeft === 1 ? 'Expires in 1 day' : `Expires in ${daysLeft} days`;
+    return { status: 'expiring_soon', label, days: daysLeft };
+  }
   return { status: 'valid', label: 'Valid' };
 }
 
@@ -97,6 +101,9 @@ export default function Moderation() {
       await api.patch(`/admin/restaurants/${id}/approve`, { approved });
       setMessage(approved ? 'Restaurant approved.' : 'Restaurant rejected.');
       load();
+      if (id === detailId) {
+        setDetail((prev) => (prev ? { ...prev, approved } : null));
+      }
     } catch (err) {
       setMessage(axios.isAxiosError(err) && err.response?.data?.error ? err.response.data.error : 'Failed');
     }
