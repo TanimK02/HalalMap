@@ -23,6 +23,14 @@ export default function Layout() {
                 Moderation
               </NavLink>
               <NavLink
+                to="/add-restaurant"
+                className={({ isActive }) =>
+                  isActive ? 'text-primary font-medium' : 'text-text-secondary hover:text-primary'
+                }
+              >
+                Add restaurant
+              </NavLink>
+              <NavLink
                 to="/users"
                 className={({ isActive }) =>
                   isActive ? 'text-primary font-medium' : 'text-text-secondary hover:text-primary'

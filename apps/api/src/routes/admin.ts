@@ -1,8 +1,19 @@
 import { Router, Request, Response } from 'express';
 import { body, param, query, validationResult } from 'express-validator';
 import Stripe from 'stripe';
+import bcrypt from 'bcrypt';
 import { prisma } from '../lib/prisma.js';
-import { requireAuth, requireRole, AuthRequest } from '../middleware/auth.js';
+import { geocode } from '../lib/geocode.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
+import type { HalalStatus } from '@halal-map/shared';
+
+const HALAL_STATUS_VALUES: HalalStatus[] = [
+  'CERTIFIED_HALAL',
+  'MUSLIM_OWNED',
+  'HALAL_FRIENDLY',
+  'PROCLAIMED_HALAL',
+  'SOME_HALAL',
+];
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -30,6 +41,89 @@ adminRouter.get(
       orderBy: [{ approved: 'asc' }, { createdAt: 'desc' }],
     });
     return res.json(restaurants);
+  }
+);
+
+// Create restaurant owner account + restaurant in one transaction (admin only)
+adminRouter.post(
+  '/restaurants',
+  [
+    body('name').trim().isLength({ min: 1 }).withMessage('Owner name required'),
+    body('email').isEmail().normalizeEmail().withMessage('Valid owner email required'),
+    body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+    body('restaurantName').trim().isLength({ min: 1 }).withMessage('Restaurant name required'),
+    body('restaurantAddress').trim().isLength({ min: 1 }).withMessage('Restaurant address required'),
+    body('restaurantPhone').optional().trim(),
+    body('restaurantDescription').optional().trim(),
+    body('restaurantHalalStatuses').isArray().withMessage('Halal statuses required'),
+    body('restaurantHalalStatuses')
+      .custom((arr) => Array.isArray(arr) && arr.length >= 1)
+      .withMessage('At least one halal status required'),
+    body('restaurantHalalStatuses.*').isIn(HALAL_STATUS_VALUES).withMessage('Invalid halal status'),
+    body('restaurantCertificateUrl').optional().trim(),
+    body('restaurantCertificateExpiresAt').optional().isISO8601(),
+    body('restaurantOffersPickup').optional().isBoolean(),
+    body('restaurantOffersDelivery').optional().isBoolean(),
+  ],
+  async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const {
+      name,
+      email,
+      password,
+      restaurantName,
+      restaurantAddress,
+      restaurantPhone,
+      restaurantDescription,
+      restaurantHalalStatuses,
+      restaurantCertificateUrl,
+      restaurantCertificateExpiresAt,
+      restaurantOffersPickup,
+      restaurantOffersDelivery,
+    } = req.body;
+
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) return res.status(409).json({ error: 'Email already registered' });
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const coords = await geocode(restaurantAddress);
+
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          name: name as string,
+          email: email as string,
+          passwordHash,
+          role: 'RESTAURANT_OWNER',
+        },
+        select: { id: true, name: true, email: true, role: true, createdAt: true },
+      });
+      const restaurant = await tx.restaurant.create({
+        data: {
+          ownerId: user.id,
+          name: restaurantName as string,
+          description: (restaurantDescription as string) || null,
+          phone: (restaurantPhone as string) || null,
+          address: restaurantAddress as string,
+          latitude: coords?.latitude ?? null,
+          longitude: coords?.longitude ?? null,
+          halalStatuses: restaurantHalalStatuses as HalalStatus[],
+          certificateUrl: (restaurantCertificateUrl as string) || null,
+          certificateExpiresAt: restaurantCertificateExpiresAt
+            ? new Date(restaurantCertificateExpiresAt as string)
+            : null,
+          approved: false,
+          offersPickup: restaurantOffersPickup ?? true,
+          offersDelivery: restaurantOffersDelivery ?? false,
+        },
+        include: { owner: { select: { id: true, name: true, email: true } } },
+      });
+      return { user, restaurant };
+    });
+
+    return res.status(201).json(result);
   }
 );
 

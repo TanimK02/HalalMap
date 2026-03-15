@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './AuthContext';
 import Layout from './Layout';
 import Login from './pages/Login';
 import Moderation from './pages/Moderation';
+import AddRestaurant from './pages/AddRestaurant';
 import Users from './pages/Users';
 import Orders from './pages/Orders';
 import Analytics from './pages/Analytics';
@@ -28,6 +29,7 @@ function AppRoutes() {
       >
         <Route index element={<Navigate to="/moderation" replace />} />
         <Route path="moderation" element={<Moderation />} />
+        <Route path="add-restaurant" element={<AddRestaurant />} />
         <Route path="users" element={<Users />} />
         <Route path="orders" element={<Orders />} />
         <Route path="analytics" element={<Analytics />} />
