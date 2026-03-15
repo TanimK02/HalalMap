@@ -227,32 +227,69 @@ adminRouter.post(
   }
 );
 
-// Platform analytics
-adminRouter.get('/analytics', async (_req: Request, res: Response) => {
-  const [totalOrders, totalRevenue, restaurantCount, pendingRestaurants] = await Promise.all([
-    prisma.order.count({ where: { status: 'COMPLETED' } }),
-    prisma.order.aggregate({
-      where: { status: 'COMPLETED' },
-      _sum: { totalPrice: true },
-    }),
-    prisma.restaurant.count({ where: { approved: true } }),
-    prisma.restaurant.count({ where: { approved: false } }),
-  ]);
+// Platform analytics — optional ?from=ISO8601&to=ISO8601 for period-specific stats
+adminRouter.get(
+  '/analytics',
+  [
+    query('from').optional().isISO8601(),
+    query('to').optional().isISO8601(),
+  ],
+  async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-  const recentOrders = await prisma.order.findMany({
-    take: 10,
-    orderBy: { createdAt: 'desc' },
-    include: {
-      restaurant: { select: { name: true } },
-      user: { select: { name: true } },
-    },
-  });
+    const from = req.query.from as string | undefined;
+    const to = req.query.to as string | undefined;
+    const hasPeriod = from && to;
+    const fromDate = from ? new Date(from) : null;
+    const toDate = to ? new Date(to) : null;
 
-  return res.json({
-    totalOrders,
-    totalRevenue: totalRevenue._sum.totalPrice ?? 0,
-    restaurantCount,
-    pendingRestaurants,
-    recentOrders,
-  });
-});
+    const baseWhere: { status: 'COMPLETED'; createdAt?: { gte?: Date; lte?: Date } } = {
+      status: 'COMPLETED',
+    };
+    if (hasPeriod && fromDate && toDate) {
+      baseWhere.createdAt = { gte: fromDate, lte: toDate };
+    }
+
+    const [totalOrders, totalRevenue, restaurantCount, pendingRestaurants] = await Promise.all([
+      prisma.order.count({ where: baseWhere }),
+      prisma.order.aggregate({
+        where: baseWhere,
+        _sum: { totalPrice: true },
+      }),
+      prisma.restaurant.count({ where: { approved: true } }),
+      prisma.restaurant.count({ where: { approved: false } }),
+    ]);
+
+    const recentOrders = await prisma.order.findMany({
+      take: 10,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        restaurant: { select: { name: true } },
+        user: { select: { name: true } },
+      },
+    });
+
+    const payload: {
+      totalOrders: number;
+      totalRevenue: number;
+      restaurantCount: number;
+      pendingRestaurants: number;
+      recentOrders: typeof recentOrders;
+      period?: { from: string; to: string };
+      platformFeeTotal?: number | null;
+    } = {
+      totalOrders,
+      totalRevenue: Number(totalRevenue._sum.totalPrice ?? 0),
+      restaurantCount,
+      pendingRestaurants,
+      recentOrders,
+    };
+    if (hasPeriod && from && to) {
+      payload.period = { from, to };
+    }
+    // When platformFeeCents exists on Order: add aggregate _sum: { platformFeeCents }, then
+    // payload.platformFeeTotal = platformFeeAgg._sum.platformFeeCents ?? 0 (in cents).
+    return res.json(payload);
+  }
+);
