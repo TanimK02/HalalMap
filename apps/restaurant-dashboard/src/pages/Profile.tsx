@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { api, type Restaurant, type BusinessHoursMap } from '../api';
+import { useConfig } from '../ConfigContext';
 import { HALAL_STATUS_LABELS } from '../constants';
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
@@ -38,6 +39,7 @@ function buildBusinessHoursPayload(formHours: Record<string, { open: string; clo
 }
 
 export default function Profile() {
+  const { enableDelivery } = useConfig();
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -234,14 +236,16 @@ export default function Profile() {
             />
             <span className="text-sm">Offers pickup</span>
           </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={form.offersDelivery}
-              onChange={(e) => setForm((f) => ({ ...f, offersDelivery: e.target.checked }))}
-            />
-            <span className="text-sm">Offers delivery</span>
-          </label>
+          {enableDelivery && (
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form.offersDelivery}
+                onChange={(e) => setForm((f) => ({ ...f, offersDelivery: e.target.checked }))}
+              />
+              <span className="text-sm">Offers delivery</span>
+            </label>
+          )}
         </div>
 
         <div className="rounded border border-gray-200 bg-surface p-4 space-y-4">
@@ -362,29 +366,31 @@ export default function Profile() {
                 />
               )}
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">Delivery fee</label>
-              <select
-                value={form.deliveryFeeType}
-                onChange={(e) => setForm((f) => ({ ...f, deliveryFeeType: e.target.value as '' | 'FLAT' | 'PERCENT' }))}
-                className="w-full rounded border border-gray-300 px-3 py-2"
-              >
-                <option value="">Use platform default</option>
-                <option value="FLAT">Flat amount (cents)</option>
-                <option value="PERCENT">Percentage</option>
-              </select>
-              {(form.deliveryFeeType === 'FLAT' || form.deliveryFeeType === 'PERCENT') && (
-                <input
-                  type="number"
-                  min="0"
-                  step={form.deliveryFeeType === 'PERCENT' ? 1 : 1}
-                  value={form.deliveryFeeValue}
-                  onChange={(e) => setForm((f) => ({ ...f, deliveryFeeValue: Number(e.target.value) || 0 }))}
-                  placeholder={form.deliveryFeeType === 'FLAT' ? 'e.g. 299 for $2.99' : 'e.g. 10 for 10%'}
-                  className="mt-2 w-full rounded border border-gray-300 px-3 py-2"
-                />
-              )}
-            </div>
+            {enableDelivery && (
+              <div>
+                <label className="mb-1 block text-sm font-medium">Delivery fee</label>
+                <select
+                  value={form.deliveryFeeType}
+                  onChange={(e) => setForm((f) => ({ ...f, deliveryFeeType: e.target.value as '' | 'FLAT' | 'PERCENT' }))}
+                  className="w-full rounded border border-gray-300 px-3 py-2"
+                >
+                  <option value="">Use platform default</option>
+                  <option value="FLAT">Flat amount (cents)</option>
+                  <option value="PERCENT">Percentage</option>
+                </select>
+                {(form.deliveryFeeType === 'FLAT' || form.deliveryFeeType === 'PERCENT') && (
+                  <input
+                    type="number"
+                    min="0"
+                    step={form.deliveryFeeType === 'PERCENT' ? 1 : 1}
+                    value={form.deliveryFeeValue}
+                    onChange={(e) => setForm((f) => ({ ...f, deliveryFeeValue: Number(e.target.value) || 0 }))}
+                    placeholder={form.deliveryFeeType === 'FLAT' ? 'e.g. 299 for $2.99' : 'e.g. 10 for 10%'}
+                    className="mt-2 w-full rounded border border-gray-300 px-3 py-2"
+                  />
+                )}
+              </div>
+            )}
           </div>
         </div>
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type Restaurant, type MenuItem } from '../api';
+import { useConfig } from '../ConfigContext';
 
 /** Restrict input to price format: digits, optional decimal, max 2 decimal places (e.g. 12, 12.99, 12.1, 12.10). */
 function formatPriceInput(value: string): string {
@@ -14,6 +15,7 @@ function formatPriceInput(value: string): string {
 }
 
 export default function Menu() {
+  const { enableDelivery } = useConfig();
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [loading, setLoading] = useState(true);
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
@@ -259,14 +261,16 @@ export default function Menu() {
                       />
                       Pickup
                     </label>
-                    <label className="flex items-center gap-1 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={item.availableForDelivery !== false}
-                        onChange={() => updateItem(item.id, { availableForDelivery: !item.availableForDelivery })}
-                      />
-                      Delivery
-                    </label>
+                    {enableDelivery && (
+                      <label className="flex items-center gap-1 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={item.availableForDelivery !== false}
+                          onChange={() => updateItem(item.id, { availableForDelivery: !item.availableForDelivery })}
+                        />
+                        Delivery
+                      </label>
+                    )}
                     <button
                       type="button"
                       onClick={() => startEditingItem(item)}
@@ -380,14 +384,16 @@ export default function Menu() {
                 />
                 Pickup
               </label>
-              <label className="flex items-center gap-1 text-sm">
-                <input
-                  type="checkbox"
-                  checked={newItem.availableForDelivery !== false}
-                  onChange={(e) => setNewItem((n) => ({ ...n, availableForDelivery: e.target.checked }))}
-                />
-                Delivery
-              </label>
+              {enableDelivery && (
+                <label className="flex items-center gap-1 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={newItem.availableForDelivery !== false}
+                    onChange={(e) => setNewItem((n) => ({ ...n, availableForDelivery: e.target.checked }))}
+                  />
+                  Delivery
+                </label>
+              )}
               <button
                 type="button"
                 onClick={() => addItem(cat.id)}

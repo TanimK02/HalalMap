@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { api } from '../api';
+import { useConfig } from '../ConfigContext';
 import { HALAL_STATUS_LABELS } from '../components/RestaurantDetailPanel';
 
 const HALAL_STATUS_VALUES = Object.keys(HALAL_STATUS_LABELS);
 
 export default function AddRestaurant() {
+  const { enableDelivery } = useConfig();
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -276,16 +278,18 @@ export default function AddRestaurant() {
                 />
                 <span className="text-sm">Offers pickup</span>
               </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  name="restaurantOffersDelivery"
-                  checked={form.restaurantOffersDelivery}
-                  onChange={handleChange}
-                  className="rounded border-gray-300"
-                />
-                <span className="text-sm">Offers delivery</span>
-              </label>
+              {enableDelivery && (
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    name="restaurantOffersDelivery"
+                    checked={form.restaurantOffersDelivery}
+                    onChange={handleChange}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm">Offers delivery</span>
+                </label>
+              )}
             </div>
           </div>
         </section>

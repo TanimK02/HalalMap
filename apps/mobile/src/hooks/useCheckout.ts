@@ -5,6 +5,7 @@ import { useStripe } from '@stripe/stripe-react-native';
 import { Alert } from 'react-native';
 import { api } from '../api';
 import { useCart } from '../context/CartContext';
+import { useConfig } from '../context/ConfigContext';
 
 export function useCheckout(
   deliveryType: 'PICKUP' | 'DELIVERY',
@@ -13,6 +14,7 @@ export function useCheckout(
   const navigation = useNavigation();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const { items, restaurantId, restaurantName, total, clearCart } = useCart();
+  const { enableDelivery } = useConfig();
   const [loading, setLoading] = useState(false);
 
   async function fetchOrderByPaymentIntentId(
@@ -38,6 +40,10 @@ export function useCheckout(
 
   async function handleCheckout() {
     if (!restaurantId || items.length === 0) return;
+    if (deliveryType === 'DELIVERY' && !enableDelivery) {
+      Alert.alert('Delivery unavailable', 'Delivery is currently not available. Please choose pickup.');
+      return;
+    }
     if (deliveryType === 'DELIVERY' && !deliveryAddressId) {
       Alert.alert('Address required', 'Please select a delivery address.');
       return;

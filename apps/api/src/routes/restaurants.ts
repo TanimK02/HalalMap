@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { body, param, query, validationResult } from 'express-validator';
 import { prisma } from '../lib/prisma.js';
 import { getEffectiveFeeStructure } from '../lib/fees.js';
+import { isDeliveryEnabled } from '../lib/config.js';
 import { geocode, haversineMiles } from '../lib/geocode.js';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth.js';
 import type { HalalStatus } from '@halal-map/shared';
@@ -117,11 +118,16 @@ restaurantsRouter.get('/:id', param('id').isString(), async (req: Request, res: 
   if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
   const pickupFee = getEffectiveFeeStructure(restaurant, 'PICKUP');
   const deliveryFee = getEffectiveFeeStructure(restaurant, 'DELIVERY');
-  return res.json({
+  const response = {
     ...restaurant,
     pickupFee,
     deliveryFee,
-  });
+  };
+  if (!isDeliveryEnabled()) {
+    response.offersDelivery = false;
+    response.deliveryFee = { type: 'flat' as const, valueCents: 0 };
+  }
+  return res.json(response);
 });
 
 // Owner: get my restaurant

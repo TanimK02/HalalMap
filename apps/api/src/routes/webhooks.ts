@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import Stripe from 'stripe';
 import { prisma } from '../lib/prisma.js';
+import { isDeliveryEnabled } from '../lib/config.js';
 import { Decimal } from '@prisma/client/runtime/library';
 
 const stripe =
@@ -82,6 +83,12 @@ webhooksRouter.post('/stripe', async (req: Request, res: Response) => {
       totalPriceStr === undefined ||
       itemsMeta.length === 0
     ) {
+      res.status(200).json({ received: true });
+      return;
+    }
+
+    if (deliveryType === 'DELIVERY' && !isDeliveryEnabled()) {
+      console.warn('[webhook] Skipping order creation: delivery disabled app-wide', { paymentIntentId: paymentIntent.id });
       res.status(200).json({ received: true });
       return;
     }

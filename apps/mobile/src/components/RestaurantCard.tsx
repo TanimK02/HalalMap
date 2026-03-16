@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { brand, halalBadgeStyles, HALAL_LABELS, hoursStatusColors } from '../theme';
 import { getHoursLabel, getHoursStatus } from '../utils/businessHours';
+import { useConfig } from '../context/ConfigContext';
 import type { Restaurant } from '../types/restaurant';
 
 export type RestaurantCardProps = {
@@ -10,6 +11,7 @@ export type RestaurantCardProps = {
 };
 
 export function RestaurantCard({ restaurant, onPress }: RestaurantCardProps) {
+  const { enableDelivery } = useConfig();
   const badgeStyle = (status: string) => halalBadgeStyles[status] ?? { bg: '#E5E7EB', text: '#1F2933' };
 
   return (
@@ -65,7 +67,7 @@ export function RestaurantCard({ restaurant, onPress }: RestaurantCardProps) {
           <Text style={styles.meta}>{Number(restaurant.distanceMiles).toFixed(1)} mi away</Text>
         )}
         {restaurant.offersPickup && <Text style={styles.meta}>Pickup</Text>}
-        {restaurant.offersDelivery && <Text style={styles.meta}>Delivery</Text>}
+        {enableDelivery && restaurant.offersDelivery && <Text style={styles.meta}>Delivery</Text>}
       </View>
     </TouchableOpacity>
   );

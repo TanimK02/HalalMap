@@ -12,3 +12,12 @@ describe('GET /health', () => {
     expect(res.body).toEqual({ ok: true });
   });
 });
+
+describe('GET /config', () => {
+  it('returns 200 and { enableDelivery: boolean }', async () => {
+    const res = await request(app).get('/config');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('enableDelivery');
+    expect(typeof res.body.enableDelivery).toBe('boolean');
+  });
+});

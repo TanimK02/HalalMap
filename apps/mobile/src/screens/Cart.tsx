@@ -12,6 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 import { api } from '../api';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { useConfig } from '../context/ConfigContext';
 import { useCheckout } from '../hooks/useCheckout';
 import { brand } from '../theme';
 import { DeliveryAddressSection } from '../components/DeliveryAddressSection';
@@ -23,6 +24,7 @@ export default function Cart() {
   const navigation = useNavigation();
   const { items, restaurantId, restaurantName, total, removeItem } = useCart();
   const { token } = useAuth();
+  const { enableDelivery } = useConfig();
   const [deliveryType, setDeliveryType] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
   const [deliveryAddressId, setDeliveryAddressId] = useState<string | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -39,7 +41,7 @@ export default function Cart() {
   const subtotal = total;
   const subtotalCents = Math.round(subtotal * 100);
   const feeStructure =
-    restaurantFees && deliveryType === 'PICKUP'
+    restaurantFees && (deliveryType === 'PICKUP' || !enableDelivery)
       ? restaurantFees.pickupFee
       : restaurantFees?.deliveryFee;
   const feeCents = feeStructure ? computeFeeCents(subtotalCents, feeStructure) : 0;
@@ -78,6 +80,10 @@ export default function Cart() {
       setShowAddAddressForm(false);
     }
   }, [deliveryType, token]);
+
+  useEffect(() => {
+    if (!enableDelivery) setDeliveryType('PICKUP');
+  }, [enableDelivery]);
 
   if (items.length === 0) {
     return (
@@ -131,28 +137,30 @@ export default function Cart() {
           </View>
         )}
       />
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Delivery type</Text>
-        <View style={styles.radioRow}>
-          <TouchableOpacity
-            style={[styles.radio, deliveryType === 'PICKUP' && styles.radioActive]}
-            onPress={() => setDeliveryType('PICKUP')}
-          >
-            <Text style={deliveryType === 'PICKUP' ? styles.radioTextActive : styles.radioText}>
-              Pickup
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.radio, deliveryType === 'DELIVERY' && styles.radioActive]}
-            onPress={() => setDeliveryType('DELIVERY')}
-          >
-            <Text style={deliveryType === 'DELIVERY' ? styles.radioTextActive : styles.radioText}>
-              Delivery
-            </Text>
-          </TouchableOpacity>
+      {enableDelivery && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Delivery type</Text>
+          <View style={styles.radioRow}>
+            <TouchableOpacity
+              style={[styles.radio, deliveryType === 'PICKUP' && styles.radioActive]}
+              onPress={() => setDeliveryType('PICKUP')}
+            >
+              <Text style={deliveryType === 'PICKUP' ? styles.radioTextActive : styles.radioText}>
+                Pickup
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.radio, deliveryType === 'DELIVERY' && styles.radioActive]}
+              onPress={() => setDeliveryType('DELIVERY')}
+            >
+              <Text style={deliveryType === 'DELIVERY' ? styles.radioTextActive : styles.radioText}>
+                Delivery
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-      {deliveryType === 'DELIVERY' && (
+      )}
+      {enableDelivery && deliveryType === 'DELIVERY' && (
         <DeliveryAddressSection
           addresses={addresses}
           deliveryAddressId={deliveryAddressId}
@@ -178,7 +186,7 @@ export default function Cart() {
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>
-              {deliveryType === 'PICKUP' ? 'Pickup fee' : 'Delivery fee'}
+              {deliveryType === 'PICKUP' || !enableDelivery ? 'Pickup fee' : 'Delivery fee'}
             </Text>
             <Text style={styles.summaryValue}>${(feeCents / 100).toFixed(2)}</Text>
           </View>
@@ -192,7 +200,7 @@ export default function Cart() {
         style={[styles.checkoutBtn, checkoutLoading && styles.checkoutBtnDisabled]}
         onPress={handleCheckout}
         disabled={
-          checkoutLoading || (deliveryType === 'DELIVERY' && !deliveryAddressId)
+          checkoutLoading || (enableDelivery && deliveryType === 'DELIVERY' && !deliveryAddressId)
         }
       >
         {checkoutLoading ? (

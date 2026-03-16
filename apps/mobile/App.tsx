@@ -11,6 +11,7 @@ import {
 import { StripeProvider, useStripe } from '@stripe/stripe-react-native';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { CartProvider, useCart } from './src/context/CartContext';
+import { ConfigProvider } from './src/context/ConfigContext';
 import { FavoritesProvider } from './src/context/FavoritesContext';
 import { ViewCartBar } from './src/components/ViewCartBar';
 import Login from './src/screens/Login';
@@ -156,12 +157,14 @@ export default function App() {
     <StripeProvider publishableKey={stripePublishableKey}>
       <StripeRedirectHandler>
         <AuthProvider>
-          <FavoritesProvider>
-            <CartProvider>
-              <StatusBar style="dark" />
-              <AppNavigator />
-            </CartProvider>
-          </FavoritesProvider>
+          <ConfigProvider>
+            <FavoritesProvider>
+              <CartProvider>
+                <StatusBar style="dark" />
+                <AppNavigator />
+              </CartProvider>
+            </FavoritesProvider>
+          </ConfigProvider>
         </AuthProvider>
       </StripeRedirectHandler>
     </StripeProvider>
