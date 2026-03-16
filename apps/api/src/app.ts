@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import { geocode } from './lib/geocode.js';
+import { geocode, geocodeSearch } from './lib/geocode.js';
 import { authRouter } from './routes/auth.js';
 import { usersRouter } from './routes/users.js';
 import { restaurantsRouter } from './routes/restaurants.js';
@@ -57,6 +57,13 @@ app.get('/config', (_req, res) => res.json(getConfig()));
 app.get('/geocode', async (req, res) => {
   const address = req.query.address as string | undefined;
   if (!address?.trim()) return res.status(400).json({ error: 'address query required' });
+  const limitParam = req.query.limit as string | undefined;
+  const parsed = limitParam != null ? parseInt(limitParam, 10) : 1;
+  const limit = Number.isNaN(parsed) || parsed < 1 ? 1 : parsed;
+  if (limit > 1) {
+    const suggestions = await geocodeSearch(address.trim(), limit);
+    return res.json(suggestions);
+  }
   const coords = await geocode(address.trim());
   if (!coords) return res.status(404).json({ error: 'Address not found' });
   return res.json(coords);
