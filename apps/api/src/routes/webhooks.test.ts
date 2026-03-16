@@ -22,28 +22,52 @@ const paymentIntentSucceededEvent = {
         deliveryAddressId: 'a1',
         totalPrice: '10',
         feeCents: '0',
+        platformFeeCents: '50',
         items: '[{"menuItemId":"m1","quantity":1,"priceAtOrder":"10"}]',
       },
     },
   },
 };
 
-jest.mock('stripe', () => ({
-  __esModule: true,
-  default: jest.fn().mockImplementation(() => ({
-    webhooks: {
-      constructEvent: jest.fn().mockReturnValue(paymentIntentSucceededEvent),
+jest.mock('stripe', () => {
+  const event = {
+    type: 'payment_intent.succeeded',
+    data: {
+      object: {
+        id: 'pi_xxx',
+        metadata: {
+          userId: 'u1',
+          restaurantId: 'r1',
+          deliveryType: 'DELIVERY',
+          deliveryAddressId: 'a1',
+          totalPrice: '10',
+          feeCents: '0',
+          platformFeeCents: '50',
+          items: '[{"menuItemId":"m1","quantity":1,"priceAtOrder":"10"}]',
+        },
+      },
     },
-  })),
-}));
+  };
+  return {
+    __esModule: true,
+    default: jest.fn().mockImplementation(() => ({
+      webhooks: { constructEvent: jest.fn().mockReturnValue(event) },
+    })),
+  };
+});
 
 jest.mock('../lib/config.js', () => ({
   isDeliveryEnabled: jest.fn().mockReturnValue(true),
 }));
 
 const { prisma } = require('../lib/prisma.js');
+const configMod = require('../lib/config.js');
 
 describe('POST /webhooks/stripe', () => {
+  beforeEach(() => {
+    configMod.isDeliveryEnabled.mockReturnValue(true);
+  });
+
   it('returns 400 when body is missing or not raw', async () => {
     // No body and no Content-Type that triggers raw parser, or body not a Buffer
     const res = await request(app)
@@ -100,5 +124,9 @@ describe('POST /webhooks/stripe', () => {
 
     process.env.STRIPE_SECRET_KEY = prevSecret;
     process.env.STRIPE_WEBHOOK_SECRET = prevWebhook;
+  });
+
+  it('includes platformFeeCents in payment intent metadata fixture (webhook handler persists it on order create)', () => {
+    expect(paymentIntentSucceededEvent.data.object.metadata.platformFeeCents).toBe('50');
   });
 });

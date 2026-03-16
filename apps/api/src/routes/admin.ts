@@ -281,15 +281,20 @@ adminRouter.get(
       baseWhere.createdAt = { gte: fromDate, lte: toDate };
     }
 
-    const [totalOrders, totalRevenue, restaurantCount, pendingRestaurants] = await Promise.all([
-      prisma.order.count({ where: baseWhere }),
-      prisma.order.aggregate({
-        where: baseWhere,
-        _sum: { totalPrice: true },
-      }),
-      prisma.restaurant.count({ where: { approved: true } }),
-      prisma.restaurant.count({ where: { approved: false } }),
-    ]);
+    const [totalOrders, totalRevenue, platformFeeAgg, restaurantCount, pendingRestaurants] =
+      await Promise.all([
+        prisma.order.count({ where: baseWhere }),
+        prisma.order.aggregate({
+          where: baseWhere,
+          _sum: { totalPrice: true },
+        }),
+        prisma.order.aggregate({
+          where: baseWhere,
+          _sum: { platformFeeCents: true },
+        }),
+        prisma.restaurant.count({ where: { approved: true } }),
+        prisma.restaurant.count({ where: { approved: false } }),
+      ]);
 
     const recentOrders = await prisma.order.findMany({
       take: 10,
@@ -318,8 +323,7 @@ adminRouter.get(
     if (hasPeriod && from && to) {
       payload.period = { from, to };
     }
-    // When platformFeeCents exists on Order: add aggregate _sum: { platformFeeCents }, then
-    // payload.platformFeeTotal = platformFeeAgg._sum.platformFeeCents ?? 0 (in cents).
+    payload.platformFeeTotal = platformFeeAgg._sum.platformFeeCents ?? 0;
     return res.json(payload);
   }
 );

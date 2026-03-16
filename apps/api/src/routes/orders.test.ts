@@ -158,6 +158,13 @@ describe('POST /orders/', () => {
     expect(res.body.order.id).toBe('order-1');
     expect(res.body.order.status).toBe('PENDING');
     expect(res.body.order.deliveryType).toBe('PICKUP');
+    expect(prisma.order.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          platformFeeCents: expect.any(Number),
+        }),
+      })
+    );
   });
 });
 

@@ -71,3 +71,20 @@ export function getEffectiveFeeCents(
   const structure = getEffectiveFeeStructure(restaurant, deliveryType);
   return computeFeeCents(subtotalCents, structure);
 }
+
+function parsePlatformFeeEnv(key: string): number {
+  const raw = process.env[key];
+  if (raw == null || raw === '') return 0;
+  const n = parseInt(raw, 10);
+  return Number.isNaN(n) || n < 0 ? 0 : n;
+}
+
+/**
+ * Platform fee in cents from env config (flat + percent of subtotal). Used for reporting and future Connect application_fee.
+ */
+export function getPlatformFeeCents(subtotalCents: number): number {
+  const flat = parsePlatformFeeEnv('PLATFORM_FEE_FLAT_CENTS');
+  const percent = parsePlatformFeeEnv('PLATFORM_FEE_PERCENT');
+  const percentCents = Math.round((subtotalCents * percent) / 100);
+  return Math.max(0, flat + percentCents);
+}

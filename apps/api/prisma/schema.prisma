@@ -143,6 +143,7 @@ model Order {
   status                 OrderStatus   @default(PENDING)
   totalPrice             Decimal       @db.Decimal(10, 2)
   feeCents               Int           @default(0)
+  platformFeeCents       Int           @default(0)
   deliveryType           DeliveryType
   deliveryAddressId      String?
   deliveryAddress        Address?      @relation("DeliveryAddress", fields: [deliveryAddressId], references: [id])
