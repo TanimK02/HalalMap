@@ -3,7 +3,7 @@ import { body, param, query, validationResult } from 'express-validator';
 import Stripe from 'stripe';
 import { prisma } from '../lib/prisma.js';
 import { getEffectiveFeeCents, getPlatformFeeCents } from '../lib/fees.js';
-import { isDeliveryEnabled } from '../lib/config.js';
+import { isDeliveryEnabled, isStripeConnectEnabled } from '../lib/config.js';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth.js';
 import type { DeliveryType, OrderStatus } from '@halal-map/shared';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -46,6 +46,15 @@ ordersRouter.post(
       include: { menuCategories: { include: { items: true } } },
     });
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+
+    // When Stripe Connect is enabled, require an active Connect account for paid orders.
+    if (stripe && isStripeConnectEnabled()) {
+      if (!restaurant.stripeConnectAccountId || restaurant.stripeConnectStatus !== 'ACTIVE') {
+        return res.status(400).json({
+          error: 'This restaurant has not finished setting up payouts yet. Please try again later or contact support.',
+        });
+      }
+    }
 
     if (deliveryType === 'DELIVERY' && !restaurant.offersDelivery) {
       return res.status(400).json({ error: 'Restaurant does not offer delivery' });
@@ -126,11 +135,20 @@ ordersRouter.post(
         }
       }
 
+      const useConnect = isStripeConnectEnabled() && !!restaurant.stripeConnectAccountId && restaurant.stripeConnectStatus === 'ACTIVE';
+
       const paymentIntent = await stripe.paymentIntents.create({
         amount: totalCents,
         currency: 'usd',
         metadata,
         payment_method_types: ['card', 'link'],
+        ...(useConnect && {
+          application_fee_amount: platformFeeCents,
+          transfer_data: {
+            destination: restaurant.stripeConnectAccountId!,
+          },
+          on_behalf_of: restaurant.stripeConnectAccountId!,
+        }),
       });
 
       return res.status(201).json({
@@ -147,6 +165,7 @@ ordersRouter.post(
         totalPrice: new Decimal(totalPrice),
         feeCents,
         platformFeeCents,
+        stripeConnectAccountId: restaurant.stripeConnectAccountId ?? null,
         deliveryType,
         deliveryAddressId: deliveryType === 'DELIVERY' ? deliveryAddressId : null,
         items: {

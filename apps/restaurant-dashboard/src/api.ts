@@ -44,6 +44,10 @@ export type Restaurant = {
   pickupFeeValue: number | null;
   deliveryFeeType: string | null;
   deliveryFeeValue: number | null;
+  stripeConnectAccountId?: string | null;
+  stripeConnectStatus?: 'UNINITIALIZED' | 'ONBOARDING' | 'ACTIVE' | 'RESTRICTED' | 'DISABLED';
+  stripeConnectRequirements?: Record<string, unknown> | null;
+  stripeConnectLastSyncedAt?: string | null;
   menuCategories?: MenuCategory[];
 };
 

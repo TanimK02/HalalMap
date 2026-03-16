@@ -57,7 +57,7 @@ function buildBusinessHoursPayload(formHours: Record<string, { open: string; clo
 }
 
 export default function Profile() {
-  const { enableDelivery } = useConfig();
+  const { enableDelivery, stripeConnectEnabled } = useConfig();
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -157,6 +157,49 @@ export default function Profile() {
       {restaurant && !restaurant.approved && (
         <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           Pending approval. Your restaurant will appear to customers after admin approval.
+        </div>
+      )}
+      {stripeConnectEnabled && restaurant && (
+        <div className="rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 space-y-2">
+          <div className="flex flex-col gap-1">
+            <span className="font-medium">Payouts via Stripe</span>
+            <span>
+              Status:{' '}
+              <span className="font-mono">
+                {restaurant.stripeConnectStatus ?? 'UNINITIALIZED'}
+              </span>
+            </span>
+            {restaurant.stripeConnectStatus !== 'ACTIVE' && (
+              <span>
+                You need to finish Stripe setup to receive payouts directly to your bank
+                account.
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const { data } = await api.post<{ url: string }>(
+                    '/restaurants/me/stripe/connect/link'
+                  );
+                  window.location.href = data.url;
+                } catch (err) {
+                  setMessage(
+                    axios.isAxiosError(err) && err.response?.data?.error
+                      ? err.response.data.error
+                      : 'Failed to start Stripe onboarding'
+                  );
+                }
+              }}
+              className="inline-flex items-center rounded bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary/90"
+            >
+              {restaurant.stripeConnectStatus === 'ACTIVE'
+                ? 'Update payout details'
+                : 'Set up payouts with Stripe'}
+            </button>
+          </div>
         </div>
       )}
       {restaurant?.certificateExpiresAt && (() => {

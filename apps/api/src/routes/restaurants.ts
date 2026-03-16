@@ -2,7 +2,8 @@ import { Router, Request, Response } from 'express';
 import { body, param, query, validationResult } from 'express-validator';
 import { prisma } from '../lib/prisma.js';
 import { getEffectiveFeeStructure } from '../lib/fees.js';
-import { isDeliveryEnabled } from '../lib/config.js';
+import { isDeliveryEnabled, isStripeConnectEnabled } from '../lib/config.js';
+import Stripe from 'stripe';
 import { geocode, haversineMiles } from '../lib/geocode.js';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth.js';
 import type { HalalStatus } from '@halal-map/shared';
@@ -12,6 +13,11 @@ const HALAL_STATUS_VALUES: HalalStatus[] = [
 ];
 
 export const restaurantsRouter = Router();
+
+const stripe =
+  process.env.STRIPE_SECRET_KEY && isStripeConnectEnabled()
+    ? new Stripe(process.env.STRIPE_SECRET_KEY)
+    : null;
 
 // Public: list approved restaurants (with optional filters and optional location sort)
 restaurantsRouter.get(
@@ -151,6 +157,102 @@ restaurantsRouter.get(
 );
 
 // Owner cannot create restaurant; only admins do via POST /admin/restaurants.
+
+// Owner: ensure Stripe Connect account exists (idempotent) and return basic status
+restaurantsRouter.post(
+  '/me/stripe/connect',
+  requireAuth,
+  requireRole('RESTAURANT_OWNER'),
+  async (req: AuthRequest, res: Response) => {
+    if (!stripe || !isStripeConnectEnabled()) {
+      return res.status(503).json({ error: 'Stripe Connect is not enabled' });
+    }
+
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { ownerId: req.userId! },
+    });
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+
+    let accountId = restaurant.stripeConnectAccountId;
+    if (!accountId) {
+      const account = await stripe.accounts.create({
+        type: 'express',
+        metadata: {
+          restaurantId: restaurant.id,
+        },
+        business_type: 'company',
+      });
+      accountId = account.id;
+      const updated = await prisma.restaurant.update({
+        where: { id: restaurant.id },
+        data: {
+          stripeConnectAccountId: account.id,
+          stripeConnectStatus: 'ONBOARDING',
+          stripeConnectLastSyncedAt: new Date(),
+        },
+      });
+      return res.json({
+        stripeConnectAccountId: updated.stripeConnectAccountId,
+        stripeConnectStatus: updated.stripeConnectStatus,
+      });
+    }
+
+    return res.json({
+      stripeConnectAccountId: accountId,
+      stripeConnectStatus: restaurant.stripeConnectStatus,
+    });
+  }
+);
+
+// Owner: create Stripe Connect onboarding or update link
+restaurantsRouter.post(
+  '/me/stripe/connect/link',
+  requireAuth,
+  requireRole('RESTAURANT_OWNER'),
+  async (req: AuthRequest, res: Response) => {
+    if (!stripe || !isStripeConnectEnabled()) {
+      return res.status(503).json({ error: 'Stripe Connect is not enabled' });
+    }
+
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { ownerId: req.userId! },
+    });
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+
+    let accountId = restaurant.stripeConnectAccountId;
+    if (!accountId) {
+      const account = await stripe.accounts.create({
+        type: 'express',
+        metadata: {
+          restaurantId: restaurant.id,
+        },
+        business_type: 'company',
+      });
+      accountId = account.id;
+      await prisma.restaurant.update({
+        where: { id: restaurant.id },
+        data: {
+          stripeConnectAccountId: account.id,
+          stripeConnectStatus: 'ONBOARDING',
+          stripeConnectLastSyncedAt: new Date(),
+        },
+      });
+    }
+
+    const origin = process.env.CLIENT_ORIGIN_RESTAURANT ?? 'http://localhost:5174';
+    const refreshUrl = `${origin}/profile?stripeOnboarding=interrupted`;
+    const returnUrl = `${origin}/profile?stripeOnboarding=completed`;
+
+    const link = await stripe.accountLinks.create({
+      account: accountId,
+      refresh_url: refreshUrl,
+      return_url: returnUrl,
+      type: 'account_onboarding',
+    });
+
+    return res.json({ url: link.url });
+  }
+);
 
 // Owner: update my restaurant
 restaurantsRouter.patch(
