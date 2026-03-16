@@ -91,6 +91,27 @@ describe('POST /orders/', () => {
     expect(res.body.error).toBe('Restaurant not found');
   });
 
+  it('returns 400 when deliveryType is DELIVERY and ENABLE_DELIVERY is false', async () => {
+    const prev = process.env.ENABLE_DELIVERY;
+    process.env.ENABLE_DELIVERY = 'false';
+    (prisma.restaurant.findFirst as jest.Mock).mockResolvedValue(null); // not reached
+
+    const res = await request(app)
+      .post('/orders/')
+      .set(auth())
+      .send({
+        restaurantId: 'r1',
+        deliveryType: 'DELIVERY',
+        deliveryAddressId: 'addr-1',
+        items: [{ menuItemId: 'm1', quantity: 1 }],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Delivery is currently unavailable');
+    expect(prisma.restaurant.findFirst).not.toHaveBeenCalled();
+    process.env.ENABLE_DELIVERY = prev;
+  });
+
   it('returns 201 with order and clientSecret null when Stripe not configured (no-Stripe branch)', async () => {
     const mockMenuItem = {
       id: 'm1',

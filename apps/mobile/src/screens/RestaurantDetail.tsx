@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { api } from '../api';
 import { useCart } from '../context/CartContext';
+import { useConfig } from '../context/ConfigContext';
 import { useFavorites } from '../context/FavoritesContext';
 import { useAuth } from '../context/AuthContext';
 import { ViewCartBar } from '../components/ViewCartBar';
@@ -31,6 +32,7 @@ export default function RestaurantDetail() {
   const { restaurantId, name: restaurantName } = route.params ?? { restaurantId: '', name: '' };
   const { addItem, items, restaurantId: cartRestaurantId } = useCart();
   const { user } = useAuth();
+  const { enableDelivery } = useConfig();
   const { isFavorited, addFavorite, removeFavorite } = useFavorites();
   const [data, setData] = useState<RestaurantDetailData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,9 +48,14 @@ export default function RestaurantDetail() {
       .finally(() => setLoading(false));
   }, [restaurantId]);
 
+  useEffect(() => {
+    if (!enableDelivery) setDeliveryType('PICKUP');
+  }, [enableDelivery]);
+
   function canAddForDeliveryType(
     item: { availableForPickup?: boolean; availableForDelivery?: boolean }
   ): boolean {
+    if (!enableDelivery) return item.availableForPickup !== false;
     const pickup = item.availableForPickup !== false;
     const delivery = item.availableForDelivery !== false;
     return deliveryType === 'PICKUP' ? pickup : delivery;
@@ -262,22 +269,24 @@ export default function RestaurantDetail() {
                 Pickup
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.deliveryTypeBtn,
-                deliveryType === 'DELIVERY' && styles.deliveryTypeBtnActive,
-              ]}
-              onPress={() => setDeliveryType('DELIVERY')}
-            >
-              <Text
+            {enableDelivery && (
+              <TouchableOpacity
                 style={[
-                  styles.deliveryTypeBtnText,
-                  deliveryType === 'DELIVERY' && styles.deliveryTypeBtnTextActive,
+                  styles.deliveryTypeBtn,
+                  deliveryType === 'DELIVERY' && styles.deliveryTypeBtnActive,
                 ]}
+                onPress={() => setDeliveryType('DELIVERY')}
               >
-                Delivery
-              </Text>
-            </TouchableOpacity>
+                <Text
+                  style={[
+                    styles.deliveryTypeBtnText,
+                    deliveryType === 'DELIVERY' && styles.deliveryTypeBtnTextActive,
+                  ]}
+                >
+                  Delivery
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 

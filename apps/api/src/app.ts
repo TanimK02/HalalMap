@@ -8,6 +8,7 @@ import { restaurantsRouter } from './routes/restaurants.js';
 import { ordersRouter } from './routes/orders.js';
 import { adminRouter } from './routes/admin.js';
 import { webhooksRouter } from './routes/webhooks.js';
+import { getConfig } from './lib/config.js';
 
 export const app = express();
 
@@ -50,6 +51,8 @@ app.use('/orders', ordersRouter);
 app.use('/admin', adminRouter);
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+app.get('/config', (_req, res) => res.json(getConfig()));
 
 app.get('/geocode', async (req, res) => {
   const address = req.query.address as string | undefined;

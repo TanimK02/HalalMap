@@ -3,6 +3,7 @@ import { body, param, query, validationResult } from 'express-validator';
 import Stripe from 'stripe';
 import { prisma } from '../lib/prisma.js';
 import { getEffectiveFeeCents } from '../lib/fees.js';
+import { isDeliveryEnabled } from '../lib/config.js';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth.js';
 import type { DeliveryType, OrderStatus } from '@halal-map/shared';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -35,6 +36,10 @@ ordersRouter.post(
       deliveryAddressId?: string;
       items: { menuItemId: string; quantity: number }[];
     };
+
+    if (deliveryType === 'DELIVERY' && !isDeliveryEnabled()) {
+      return res.status(400).json({ error: 'Delivery is currently unavailable' });
+    }
 
     const restaurant = await prisma.restaurant.findFirst({
       where: { id: restaurantId, approved: true },

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import { useConfig } from '../ConfigContext';
 
 export const HALAL_STATUS_LABELS: Record<string, string> = {
   CERTIFIED_HALAL: 'Certified Halal',
@@ -60,6 +61,7 @@ export default function RestaurantDetailPanel({
   onApproved,
   onDetailUpdated,
 }: Props) {
+  const { enableDelivery } = useConfig();
   const [detail, setDetail] = useState<RestaurantDetail | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -164,8 +166,10 @@ export default function RestaurantDetailPanel({
                 {(detail.halalStatuses ?? []).map((s) => HALAL_STATUS_LABELS[s] ?? s).join(', ') || '—'}
               </p>
               <p className="text-sm text-text-secondary">
-                <span className="font-medium text-text-primary">Pickup:</span> {detail.offersPickup ? 'Yes' : 'No'} ·{' '}
-                <span className="font-medium text-text-primary">Delivery:</span> {detail.offersDelivery ? 'Yes' : 'No'}
+                <span className="font-medium text-text-primary">Pickup:</span> {detail.offersPickup ? 'Yes' : 'No'}
+                {' · '}
+                <span className="font-medium text-text-primary">Delivery:</span>{' '}
+                {enableDelivery ? (detail.offersDelivery ? 'Yes' : 'No') : 'No (disabled app-wide)'}
               </p>
               <div>
                 <p className="mb-1 text-sm font-medium text-text-primary">Owner</p>
