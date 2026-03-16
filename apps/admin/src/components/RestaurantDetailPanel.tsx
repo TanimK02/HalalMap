@@ -68,15 +68,27 @@ export default function RestaurantDetailPanel({
       setDetail(null);
       return;
     }
+    let cancelled = false;
+    const controller = new AbortController();
     setLoading(true);
     api
-      .get<RestaurantDetail>(`/admin/restaurants/${restaurantId}`)
+      .get<RestaurantDetail>(`/admin/restaurants/${restaurantId}`, { signal: controller.signal })
       .then((r) => {
-        setDetail(r.data);
-        onDetailUpdated?.(r.data);
+        if (!cancelled) {
+          setDetail(r.data);
+          onDetailUpdated?.(r.data);
+        }
       })
-      .catch(() => setDetail(null))
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        if (!cancelled && err.code !== 'ERR_CANCELED') setDetail(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [restaurantId]);
 
   useEffect(() => {

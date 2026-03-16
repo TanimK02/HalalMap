@@ -2,14 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { api } from '../api';
-
-const HALAL_STATUS_LABELS: Record<string, string> = {
-  CERTIFIED_HALAL: 'Certified Halal',
-  MUSLIM_OWNED: 'Muslim-Owned',
-  HALAL_FRIENDLY: 'Halal-Friendly',
-  PROCLAIMED_HALAL: 'Proclaimed Halal',
-  SOME_HALAL: 'Some Halal',
-};
+import { HALAL_STATUS_LABELS } from '../components/RestaurantDetailPanel';
 
 const HALAL_STATUS_VALUES = Object.keys(HALAL_STATUS_LABELS);
 
