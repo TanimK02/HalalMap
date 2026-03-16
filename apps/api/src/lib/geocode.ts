@@ -8,6 +8,33 @@ export interface GeocodeResult {
   longitude: number;
 }
 
+export interface GeocodeSuggestion {
+  displayName: string;
+  latitude: number;
+  longitude: number;
+  address?: {
+    street: string;
+    city: string;
+    state?: string;
+    postalCode?: string;
+  };
+}
+
+type NominatimHit = {
+  lat?: string;
+  lon?: string;
+  display_name?: string;
+  address?: {
+    road?: string;
+    house_number?: string;
+    city?: string;
+    town?: string;
+    village?: string;
+    state?: string;
+    postcode?: string;
+  };
+};
+
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 
 export async function geocode(address: string): Promise<GeocodeResult | null> {
@@ -19,7 +46,7 @@ export async function geocode(address: string): Promise<GeocodeResult | null> {
       headers: { 'User-Agent': 'HalalMap/1.0' },
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as { lat?: string; lon?: string }[];
+    const data = (await res.json()) as NominatimHit[];
     if (!Array.isArray(data) || data.length === 0) return null;
     const first = data[0];
     const lat = first?.lat != null ? parseFloat(first.lat) : NaN;
@@ -28,6 +55,51 @@ export async function geocode(address: string): Promise<GeocodeResult | null> {
     return { latitude: lat, longitude: lon };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Geocode with multiple results and address details for suggestions/autocomplete.
+ * Respect Nominatim usage: max 1 request per second.
+ */
+export async function geocodeSearch(
+  address: string,
+  limit = 5
+): Promise<GeocodeSuggestion[]> {
+  if (!address?.trim()) return [];
+  const capped = Math.min(40, Math.max(1, Math.floor(limit)));
+  const query = encodeURIComponent(address.trim());
+  const url = `${NOMINATIM_URL}?q=${query}&format=json&addressdetails=1&limit=${capped}`;
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'HalalMap/1.0' },
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as NominatimHit[];
+    if (!Array.isArray(data)) return [];
+    return data
+      .map((item) => {
+        const lat = item?.lat != null ? parseFloat(item.lat) : NaN;
+        const lon = item?.lon != null ? parseFloat(item.lon) : NaN;
+        if (Number.isNaN(lat) || Number.isNaN(lon)) return null;
+        const addr = item.address;
+        const street = [addr?.house_number, addr?.road].filter(Boolean).join(' ').trim();
+        const city = addr?.city ?? addr?.town ?? addr?.village ?? '';
+        const state = addr?.state ?? undefined;
+        const postalCode = addr?.postcode ?? undefined;
+        return {
+          displayName: item.display_name ?? '',
+          latitude: lat,
+          longitude: lon,
+          address:
+            street || city || state || postalCode
+              ? { street: street || city || '—', city, state, postalCode }
+              : undefined,
+        };
+      })
+      .filter((s): s is GeocodeSuggestion => s != null);
+  } catch {
+    return [];
   }
 }
 
