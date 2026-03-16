@@ -37,7 +37,7 @@ export default function Restaurants() {
   }, []);
 
   useEffect(() => {
-    if (detailFromUrl && detailFromUrl !== detailId) setDetailId(detailFromUrl);
+    setDetailId(detailFromUrl || null);
   }, [detailFromUrl]);
 
   function openDetail(id: string) {
