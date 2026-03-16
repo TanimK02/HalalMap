@@ -50,7 +50,7 @@ export default function Dashboard() {
           <p className="text-2xl font-semibold text-primary">{todayOrders.length}</p>
         </div>
         <div className="rounded-lg border border-gray-200 bg-surface p-4">
-          <p className="text-sm text-text-secondary">Total revenue</p>
+          <p className="text-sm text-text-secondary">All-time revenue</p>
           <p className="text-2xl font-semibold text-primary">${revenue.toFixed(2)}</p>
         </div>
         <div className="rounded-lg border border-gray-200 bg-surface p-4">

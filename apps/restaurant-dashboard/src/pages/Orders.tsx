@@ -8,6 +8,7 @@ export default function Orders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
 
   function load() {
     const params = statusFilter ? { status: statusFilter } : {};
@@ -18,16 +19,25 @@ export default function Orders() {
       .finally(() => setLoading(false));
   }
 
+  function refresh() {
+    setLoading(true);
+    load();
+  }
+
   useEffect(() => {
     load();
   }, [statusFilter]);
 
   async function updateStatus(orderId: string, status: string) {
+    if (updatingOrderId) return;
+    setUpdatingOrderId(orderId);
     try {
       await api.patch(`/orders/restaurant/orders/${orderId}`, { status });
       load();
     } catch (e) {
       console.error(e);
+    } finally {
+      setUpdatingOrderId(null);
     }
   }
 
@@ -35,7 +45,17 @@ export default function Orders() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-text-primary">Orders</h1>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-2xl font-semibold text-text-primary">Orders</h1>
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={loading}
+          className="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-text-primary hover:bg-gray-50 disabled:opacity-50"
+        >
+          Refresh
+        </button>
+      </div>
       <div className="flex gap-2">
         <select
           value={statusFilter}
@@ -94,7 +114,8 @@ export default function Orders() {
                       key={s}
                       type="button"
                       onClick={() => updateStatus(order.id, s)}
-                      className="rounded border border-primary bg-white px-3 py-1 text-sm text-primary hover:bg-primary/10"
+                      disabled={updatingOrderId === order.id}
+                      className="rounded border border-primary bg-white px-3 py-1 text-sm text-primary hover:bg-primary/10 disabled:opacity-50"
                     >
                       Set {ORDER_STATUS_LABELS[s]}
                     </button>
@@ -102,9 +123,18 @@ export default function Orders() {
                   <button
                     type="button"
                     onClick={() => updateStatus(order.id, 'COMPLETED')}
-                    className="rounded bg-primary px-3 py-1 text-sm text-white hover:bg-primary/90"
+                    disabled={updatingOrderId === order.id}
+                    className="rounded bg-primary px-3 py-1 text-sm text-white hover:bg-primary/90 disabled:opacity-50"
                   >
                     Mark completed
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateStatus(order.id, 'CANCELLED')}
+                    disabled={updatingOrderId === order.id}
+                    className="rounded border border-red-300 bg-white px-3 py-1 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    Cancel order
                   </button>
                 </div>
               )}

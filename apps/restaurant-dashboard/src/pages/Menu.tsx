@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type Restaurant, type MenuItem } from '../api';
+import { api, type Restaurant, type MenuCategory, type MenuItem } from '../api';
 import { useConfig } from '../ConfigContext';
 
 /** Restrict input to price format: digits, optional decimal, max 2 decimal places (e.g. 12, 12.99, 12.1, 12.10). */
@@ -24,6 +24,7 @@ export default function Menu() {
   const [newItem, setNewItem] = useState<Partial<MenuItem> & { categoryId?: string }>({});
   const [editImageUrl, setEditImageUrl] = useState('');
   const [editItemForm, setEditItemForm] = useState<{ name: string; description: string; price: string; imageUrl: string }>({ name: '', description: '', price: '', imageUrl: '' });
+  const [reordering, setReordering] = useState(false);
 
   function load() {
     api
@@ -143,6 +144,86 @@ export default function Menu() {
     }
   }
 
+  async function moveCategoryUp(index: number) {
+    const cats = restaurant!.menuCategories ?? [];
+    if (index <= 0 || index >= cats.length || reordering) return;
+    setReordering(true);
+    const prev = cats[index - 1];
+    const curr = cats[index];
+    try {
+      await Promise.all([
+        api.patch(`/restaurants/me/restaurant/categories/${prev.id}`, { sortOrder: curr.sortOrder }),
+        api.patch(`/restaurants/me/restaurant/categories/${curr.id}`, { sortOrder: prev.sortOrder }),
+      ]);
+      load();
+    } catch (e) {
+      console.error(e);
+      load();
+    } finally {
+      setReordering(false);
+    }
+  }
+
+  async function moveCategoryDown(index: number) {
+    const cats = restaurant!.menuCategories ?? [];
+    if (index < 0 || index >= cats.length - 1 || reordering) return;
+    setReordering(true);
+    const curr = cats[index];
+    const next = cats[index + 1];
+    try {
+      await Promise.all([
+        api.patch(`/restaurants/me/restaurant/categories/${curr.id}`, { sortOrder: next.sortOrder }),
+        api.patch(`/restaurants/me/restaurant/categories/${next.id}`, { sortOrder: curr.sortOrder }),
+      ]);
+      load();
+    } catch (e) {
+      console.error(e);
+      load();
+    } finally {
+      setReordering(false);
+    }
+  }
+
+  async function moveItemUp(category: MenuCategory, itemIndex: number) {
+    const items = category.items ?? [];
+    if (itemIndex <= 0 || itemIndex >= items.length || reordering) return;
+    setReordering(true);
+    const prev = items[itemIndex - 1];
+    const curr = items[itemIndex];
+    try {
+      await Promise.all([
+        api.patch(`/restaurants/me/restaurant/items/${prev.id}`, { sortOrder: curr.sortOrder }),
+        api.patch(`/restaurants/me/restaurant/items/${curr.id}`, { sortOrder: prev.sortOrder }),
+      ]);
+      load();
+    } catch (e) {
+      console.error(e);
+      load();
+    } finally {
+      setReordering(false);
+    }
+  }
+
+  async function moveItemDown(category: MenuCategory, itemIndex: number) {
+    const items = category.items ?? [];
+    if (itemIndex < 0 || itemIndex >= items.length - 1 || reordering) return;
+    setReordering(true);
+    const curr = items[itemIndex];
+    const next = items[itemIndex + 1];
+    try {
+      await Promise.all([
+        api.patch(`/restaurants/me/restaurant/items/${curr.id}`, { sortOrder: next.sortOrder }),
+        api.patch(`/restaurants/me/restaurant/items/${next.id}`, { sortOrder: curr.sortOrder }),
+      ]);
+      load();
+    } catch (e) {
+      console.error(e);
+      load();
+    } finally {
+      setReordering(false);
+    }
+  }
+
   if (loading) return <div className="text-text-secondary">Loading...</div>;
   if (!restaurant) {
     return (
@@ -178,28 +259,50 @@ export default function Menu() {
         </div>
       </div>
 
-      {categories.map((cat) => (
+      {categories.map((cat, catIndex) => (
         <div key={cat.id} className="rounded border border-gray-200 bg-surface p-4">
           <div className="mb-3 flex items-center justify-between">
-            {editingCategory === cat.id ? (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  defaultValue={cat.name}
-                  onBlur={(e) => updateCategory(cat.id, e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') updateCategory(cat.id, (e.target as HTMLInputElement).value);
-                  }}
-                  autoFocus
-                  className="rounded border border-gray-300 px-2 py-1"
-                />
-                <button type="button" onClick={() => setEditingCategory(null)} className="text-sm text-text-secondary">
-                  Done
+            <div className="flex items-center gap-2">
+              <div className="flex flex-col">
+                <button
+                  type="button"
+                  onClick={() => moveCategoryUp(catIndex)}
+                  disabled={catIndex === 0 || reordering}
+                  className="rounded border border-gray-300 p-0.5 text-text-secondary hover:bg-gray-100 disabled:opacity-40 disabled:pointer-events-none"
+                  aria-label="Move category up"
+                >
+                  ▲
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveCategoryDown(catIndex)}
+                  disabled={catIndex === categories.length - 1 || reordering}
+                  className="rounded border border-gray-300 p-0.5 text-text-secondary hover:bg-gray-100 disabled:opacity-40 disabled:pointer-events-none"
+                  aria-label="Move category down"
+                >
+                  ▼
                 </button>
               </div>
-            ) : (
-              <h2 className="font-medium text-text-primary">{cat.name}</h2>
-            )}
+              {editingCategory === cat.id ? (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    defaultValue={cat.name}
+                    onBlur={(e) => updateCategory(cat.id, e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') updateCategory(cat.id, (e.target as HTMLInputElement).value);
+                    }}
+                    autoFocus
+                    className="rounded border border-gray-300 px-2 py-1"
+                  />
+                  <button type="button" onClick={() => setEditingCategory(null)} className="text-sm text-text-secondary">
+                    Done
+                  </button>
+                </div>
+              ) : (
+                <h2 className="font-medium text-text-primary">{cat.name}</h2>
+              )}
+            </div>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -219,10 +322,30 @@ export default function Menu() {
           </div>
 
           <ul className="space-y-2">
-            {(cat.items ?? []).map((item) => (
+            {(cat.items ?? []).map((item, itemIndex) => (
               <li key={item.id} className="rounded bg-background px-3 py-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <div className="flex flex-col shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => moveItemUp(cat, itemIndex)}
+                        disabled={itemIndex === 0 || reordering}
+                        className="rounded border border-gray-300 p-0.5 text-text-secondary hover:bg-gray-100 disabled:opacity-40 disabled:pointer-events-none text-xs"
+                        aria-label="Move item up"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveItemDown(cat, itemIndex)}
+                        disabled={itemIndex === (cat.items?.length ?? 0) - 1 || reordering}
+                        className="rounded border border-gray-300 p-0.5 text-text-secondary hover:bg-gray-100 disabled:opacity-40 disabled:pointer-events-none text-xs"
+                        aria-label="Move item down"
+                      >
+                        ▼
+                      </button>
+                    </div>
                     {item.imageUrl ? (
                       <img
                         src={item.imageUrl}

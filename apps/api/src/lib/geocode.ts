@@ -77,27 +77,33 @@ export async function geocodeSearch(
     if (!res.ok) return [];
     const data = (await res.json()) as NominatimHit[];
     if (!Array.isArray(data)) return [];
-    return data
-      .map((item) => {
-        const lat = item?.lat != null ? parseFloat(item.lat) : NaN;
-        const lon = item?.lon != null ? parseFloat(item.lon) : NaN;
-        if (Number.isNaN(lat) || Number.isNaN(lon)) return null;
-        const addr = item.address;
-        const street = [addr?.house_number, addr?.road].filter(Boolean).join(' ').trim();
-        const city = addr?.city ?? addr?.town ?? addr?.village ?? '';
-        const state = addr?.state ?? undefined;
-        const postalCode = addr?.postcode ?? undefined;
-        return {
-          displayName: item.display_name ?? '',
-          latitude: lat,
-          longitude: lon,
-          address:
-            street || city || state || postalCode
-              ? { street: street || city || '—', city, state, postalCode }
-              : undefined,
-        };
-      })
-      .filter((s): s is GeocodeSuggestion => s != null);
+    const results: GeocodeSuggestion[] = [];
+    for (const item of data) {
+      const lat = item?.lat != null ? parseFloat(item.lat) : NaN;
+      const lon = item?.lon != null ? parseFloat(item.lon) : NaN;
+      if (Number.isNaN(lat) || Number.isNaN(lon)) continue;
+      const addr = item.address;
+      const street = [addr?.house_number, addr?.road].filter(Boolean).join(' ').trim();
+      const city = addr?.city ?? addr?.town ?? addr?.village ?? '';
+      const state = addr?.state;
+      const postalCode = addr?.postcode;
+      const suggestion: GeocodeSuggestion = {
+        displayName: item.display_name ?? '',
+        latitude: lat,
+        longitude: lon,
+        address:
+          street || city || state || postalCode
+            ? {
+                street: street || city || '—',
+                city,
+                ...(state != null && state !== '' && { state }),
+                ...(postalCode != null && postalCode !== '' && { postalCode }),
+              }
+            : undefined,
+      };
+      results.push(suggestion);
+    }
+    return results;
   } catch {
     return [];
   }

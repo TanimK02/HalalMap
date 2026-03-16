@@ -5,6 +5,24 @@ import { useConfig } from '../ConfigContext';
 import { HALAL_STATUS_LABELS } from '../constants';
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+
+type CertificateStatus = { status: 'expired' | 'expiring_soon' | 'valid' | 'none'; label: string };
+function getCertificateStatus(certificateExpiresAt: string | null): CertificateStatus {
+  if (!certificateExpiresAt) return { status: 'none', label: 'No certificate' };
+  const expires = new Date(certificateExpiresAt);
+  if (Number.isNaN(expires.getTime())) return { status: 'none', label: 'Invalid expiry date' };
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  expires.setHours(0, 0, 0, 0);
+  const daysLeft = Math.ceil((expires.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (daysLeft < 0) return { status: 'expired', label: 'Expired' };
+  if (daysLeft <= 30) {
+    const label =
+      daysLeft === 0 ? 'Expires today' : daysLeft === 1 ? 'Expires in 1 day' : `Expires in ${daysLeft} days`;
+    return { status: 'expiring_soon', label };
+  }
+  return { status: 'valid', label: 'Valid' };
+}
 const DAY_LABELS: Record<(typeof DAY_KEYS)[number], string> = {
   mon: 'Monday',
   tue: 'Tuesday',
@@ -141,6 +159,24 @@ export default function Profile() {
           Pending approval. Your restaurant will appear to customers after admin approval.
         </div>
       )}
+      {restaurant?.certificateExpiresAt && (() => {
+        const cert = getCertificateStatus(restaurant.certificateExpiresAt);
+        if (cert.status === 'expired') {
+          return (
+            <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              Certificate has expired. Please update the certificate expiry date below so customers can see your current certification.
+            </div>
+          );
+        }
+        if (cert.status === 'expiring_soon') {
+          return (
+            <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              Certificate {cert.label.toLowerCase()}. Consider updating the certificate expiry date below.
+            </div>
+          );
+        }
+        return null;
+      })()}
       {message && (
         <div className={`rounded p-3 text-sm ${message === 'Saved.' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'}`}>
           {message}
