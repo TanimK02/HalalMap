@@ -160,8 +160,8 @@ export default function App() {
           <ConfigProvider>
             <FavoritesProvider>
               <CartProvider>
-              <StatusBar style="dark" />
-              <AppNavigator />
+                <StatusBar style="dark" />
+                <AppNavigator />
               </CartProvider>
             </FavoritesProvider>
           </ConfigProvider>

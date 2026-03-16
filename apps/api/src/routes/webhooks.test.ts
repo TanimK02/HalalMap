@@ -42,7 +42,6 @@ jest.mock('../lib/config.js', () => ({
 }));
 
 const { prisma } = require('../lib/prisma.js');
-const config = require('../lib/config.js');
 
 describe('POST /webhooks/stripe', () => {
   it('returns 400 when body is missing or not raw', async () => {

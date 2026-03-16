@@ -88,6 +88,7 @@ webhooksRouter.post('/stripe', async (req: Request, res: Response) => {
     }
 
     if (deliveryType === 'DELIVERY' && !isDeliveryEnabled()) {
+      console.warn('[webhook] Skipping order creation: delivery disabled app-wide', { paymentIntentId: paymentIntent.id });
       res.status(200).json({ received: true });
       return;
     }
