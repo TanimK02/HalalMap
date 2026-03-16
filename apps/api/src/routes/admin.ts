@@ -318,8 +318,9 @@ adminRouter.get(
     if (hasPeriod && from && to) {
       payload.period = { from, to };
     }
-    // When platformFeeCents exists on Order: add aggregate _sum: { platformFeeCents }, then
-    // payload.platformFeeTotal = platformFeeAgg._sum.platformFeeCents ?? 0 (in cents).
+    // Platform fee total (cents). When Order.platformFeeCents exists, replace with:
+    // prisma.order.aggregate({ where: baseWhere, _sum: { platformFeeCents: true } }) then _sum.platformFeeCents ?? 0
+    payload.platformFeeTotal = 0;
     return res.json(payload);
   }
 );
