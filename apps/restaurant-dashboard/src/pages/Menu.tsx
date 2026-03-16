@@ -72,6 +72,7 @@ export default function Menu() {
     const { name, description, price, imageUrl, availableForPickup, availableForDelivery } = newItem;
     const priceNum = price === undefined || price === '' ? null : Number(price);
     if (!name?.trim() || priceNum == null || Number.isNaN(priceNum) || priceNum < 0) return;
+    if (priceNum === 0 && !confirm('Price is $0. Save this item anyway?')) return;
     try {
       await api.post(`/restaurants/me/restaurant/categories/${categoryId}/items`, {
         name: name.trim(),
@@ -106,6 +107,7 @@ export default function Menu() {
     const priceStr = editItemForm.price.trim();
     const priceNum = priceStr === '' ? null : Number(priceStr);
     if (priceNum != null && (Number.isNaN(priceNum) || priceNum < 0)) return;
+    if (priceNum === 0 && !confirm('Price is $0. Save anyway?')) return;
     updateItem(item.id, {
       ...(editItemForm.name.trim() && { name: editItemForm.name.trim() }),
       ...(editItemForm.description !== undefined && { description: editItemForm.description.trim() || null }),
@@ -318,6 +320,9 @@ export default function Menu() {
                       placeholder="Price"
                       className="w-20 rounded border border-gray-300 px-2 py-1 text-sm"
                     />
+                    {editItemForm.price.trim() !== '' && Number(editItemForm.price) === 0 && (
+                      <span className="text-sm text-amber-600">Price is $0</span>
+                    )}
                     <input
                       type="url"
                       value={editItemForm.imageUrl}
@@ -369,6 +374,9 @@ export default function Menu() {
                 onChange={(e) => setNewItem((n) => ({ ...n, price: formatPriceInput(e.target.value) || undefined }))}
                 className="w-20 rounded border border-gray-300 px-2 py-1"
               />
+              {(newItem.price ?? '') !== '' && Number(newItem.price) === 0 && (
+                <span className="text-sm text-amber-600">Price is $0</span>
+              )}
               <input
                 type="url"
                 placeholder="Image URL (optional)"
