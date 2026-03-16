@@ -210,7 +210,9 @@ describe('POST /admin/orders/:orderId/refund', () => {
 describe('GET /admin/analytics', () => {
   it('returns 200 with analytics when ADMIN', async () => {
     (prisma.order.count as jest.Mock).mockResolvedValue(100);
-    (prisma.order.aggregate as jest.Mock).mockResolvedValue({ _sum: { totalPrice: 5000 } });
+    (prisma.order.aggregate as jest.Mock)
+      .mockResolvedValueOnce({ _sum: { totalPrice: 5000 } })
+      .mockResolvedValueOnce({ _sum: { platformFeeCents: 2500 } });
     (prisma.restaurant.count as jest.Mock)
       .mockResolvedValueOnce(10)
       .mockResolvedValueOnce(2);
@@ -226,5 +228,7 @@ describe('GET /admin/analytics', () => {
     expect(res.body).toHaveProperty('restaurantCount');
     expect(res.body).toHaveProperty('pendingRestaurants');
     expect(res.body).toHaveProperty('recentOrders');
+    expect(res.body).toHaveProperty('platformFeeTotal');
+    expect(res.body.platformFeeTotal).toBe(2500);
   });
 });

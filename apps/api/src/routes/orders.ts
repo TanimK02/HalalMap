@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { body, param, query, validationResult } from 'express-validator';
 import Stripe from 'stripe';
 import { prisma } from '../lib/prisma.js';
-import { getEffectiveFeeCents } from '../lib/fees.js';
+import { getEffectiveFeeCents, getPlatformFeeCents } from '../lib/fees.js';
 import { isDeliveryEnabled } from '../lib/config.js';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth.js';
 import type { DeliveryType, OrderStatus } from '@halal-map/shared';
@@ -97,6 +97,7 @@ ordersRouter.post(
     if (subtotalCents <= 0) return res.status(400).json({ error: 'Order total must be positive' });
 
     const feeCents = getEffectiveFeeCents(restaurant, deliveryType, subtotalCents);
+    const platformFeeCents = getPlatformFeeCents(subtotalCents);
     const totalCents = subtotalCents + feeCents;
     const totalPrice = totalCents / 100;
 
@@ -114,6 +115,7 @@ ordersRouter.post(
         deliveryAddressId: deliveryType === 'DELIVERY' && deliveryAddressId ? deliveryAddressId : '',
         totalPrice: String(totalPrice),
         feeCents: String(feeCents),
+        platformFeeCents: String(platformFeeCents),
       };
       const maxMetaVal = 500;
       if (itemsJson.length <= maxMetaVal) {
@@ -144,6 +146,7 @@ ordersRouter.post(
         status: 'PENDING',
         totalPrice: new Decimal(totalPrice),
         feeCents,
+        platformFeeCents,
         deliveryType,
         deliveryAddressId: deliveryType === 'DELIVERY' ? deliveryAddressId : null,
         items: {
@@ -224,6 +227,7 @@ ordersRouter.post(
       deliveryAddressIdRaw && deliveryAddressIdRaw !== '' ? deliveryAddressIdRaw : null;
     const totalPriceStr = meta.totalPrice;
     const feeCentsStr = meta.feeCents;
+    const platformFeeCentsStr = meta.platformFeeCents;
     const itemsMeta = parseItemsFromPaymentMeta(meta);
     if (!userId || !restaurantId || totalPriceStr === undefined || itemsMeta.length === 0) {
       return res.status(400).json({ error: 'Invalid payment intent metadata' });
@@ -231,6 +235,8 @@ ordersRouter.post(
 
     const totalPrice = new Decimal(totalPriceStr);
     const feeCents = feeCentsStr != null ? parseInt(feeCentsStr, 10) : 0;
+    const platformFeeCents =
+      platformFeeCentsStr != null ? parseInt(platformFeeCentsStr, 10) : 0;
     const orderItems = itemsMeta.map((item) => ({
       menuItemId: item.menuItemId,
       quantity: item.quantity,
@@ -244,6 +250,7 @@ ordersRouter.post(
         status: 'PENDING',
         totalPrice,
         feeCents: Number.isNaN(feeCents) ? 0 : feeCents,
+        platformFeeCents: Number.isNaN(platformFeeCents) ? 0 : platformFeeCents,
         deliveryType,
         deliveryAddressId,
         stripePaymentIntentId: paymentIntentId,

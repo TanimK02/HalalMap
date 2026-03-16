@@ -74,6 +74,7 @@ webhooksRouter.post('/stripe', async (req: Request, res: Response) => {
       deliveryAddressIdRaw && deliveryAddressIdRaw !== '' ? deliveryAddressIdRaw : null;
     const totalPriceStr = meta.totalPrice;
     const feeCentsStr = meta.feeCents;
+    const platformFeeCentsStr = meta.platformFeeCents;
     const itemsMeta = parseItemsFromMetadata(meta);
 
     if (
@@ -95,6 +96,8 @@ webhooksRouter.post('/stripe', async (req: Request, res: Response) => {
 
     const totalPrice = new Decimal(totalPriceStr);
     const feeCents = feeCentsStr != null ? parseInt(feeCentsStr, 10) : 0;
+    const platformFeeCents =
+      platformFeeCentsStr != null ? parseInt(platformFeeCentsStr, 10) : 0;
     const orderItems = itemsMeta.map((item) => ({
       menuItemId: item.menuItemId,
       quantity: item.quantity,
@@ -108,6 +111,7 @@ webhooksRouter.post('/stripe', async (req: Request, res: Response) => {
         status: 'PENDING',
         totalPrice,
         feeCents: Number.isNaN(feeCents) ? 0 : feeCents,
+        platformFeeCents: Number.isNaN(platformFeeCents) ? 0 : platformFeeCents,
         deliveryType,
         deliveryAddressId,
         stripePaymentIntentId: paymentIntent.id,
