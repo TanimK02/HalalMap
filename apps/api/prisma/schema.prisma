@@ -35,6 +35,14 @@ enum DeliveryType {
   DELIVERY
 }
 
+enum StripeConnectStatus {
+  UNINITIALIZED
+  ONBOARDING
+  ACTIVE
+  RESTRICTED
+  DISABLED
+}
+
 model User {
   id           String    @id @default(cuid())
   name         String
@@ -90,6 +98,12 @@ model Restaurant {
   deliveryFeeValue     Int?
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
+
+  // Stripe Connect
+  stripeConnectAccountId   String?              @unique
+  stripeConnectStatus      StripeConnectStatus  @default(UNINITIALIZED)
+  stripeConnectRequirements Json?
+  stripeConnectLastSyncedAt DateTime?
 
   menuCategories MenuCategory[]
   orders        Order[]
@@ -148,6 +162,7 @@ model Order {
   deliveryAddressId      String?
   deliveryAddress        Address?      @relation("DeliveryAddress", fields: [deliveryAddressId], references: [id])
   stripePaymentIntentId  String?       @unique
+  stripeConnectAccountId String?
   paymentConfirmedAt     DateTime?
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt

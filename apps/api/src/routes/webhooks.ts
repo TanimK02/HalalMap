@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import Stripe from 'stripe';
 import { prisma } from '../lib/prisma.js';
-import { isDeliveryEnabled } from '../lib/config.js';
+import { isDeliveryEnabled, isStripeConnectEnabled } from '../lib/config.js';
 import { Decimal } from '@prisma/client/runtime/library';
 
 const stripe =
@@ -104,6 +104,11 @@ webhooksRouter.post('/stripe', async (req: Request, res: Response) => {
       priceAtOrder: new Decimal(item.priceAtOrder),
     }));
 
+    const connectAccountId =
+      isStripeConnectEnabled() && paymentIntent.transfer_data && typeof paymentIntent.transfer_data.destination === 'string'
+        ? paymentIntent.transfer_data.destination
+        : null;
+
     await prisma.order.create({
       data: {
         userId,
@@ -115,12 +120,50 @@ webhooksRouter.post('/stripe', async (req: Request, res: Response) => {
         deliveryType,
         deliveryAddressId,
         stripePaymentIntentId: paymentIntent.id,
+        stripeConnectAccountId: connectAccountId,
         paymentConfirmedAt: new Date(),
         items: {
           create: orderItems,
         },
       },
     });
+    res.status(200).json({ received: true });
+    return;
+  }
+
+  if (event.type === 'account.updated'') {
+    const account = event.data.object as Stripe.Account;
+    const restaurantId = typeof account.metadata?.restaurantId === 'string' ? account.metadata.restaurantId : null;
+    if (!restaurantId) {
+      res.status(200).json({ received: true });
+      return;
+    }
+
+    // Map Stripe account status to our StripeConnectStatus enum
+    let status: 'UNINITIALIZED' | 'ONBOARDING' | 'ACTIVE' | 'RESTRICTED' | 'DISABLED' = 'ONBOARDING';
+    const chargesEnabled = !!account.charges_enabled;
+    const payoutsEnabled = !!account.payouts_enabled;
+    const disabledReason = account.requirements?.disabled_reason;
+
+    if (disabledReason) {
+      status = 'DISABLED';
+    } else if (chargesEnabled && payoutsEnabled) {
+      status = 'ACTIVE';
+    } else if (account.requirements?.currently_due?.length || account.requirements?.past_due?.length) {
+      status = 'RESTRICTED';
+    }
+
+    await prisma.restaurant.updateMany({
+      where: { id: restaurantId, stripeConnectAccountId: account.id },
+      data: {
+        stripeConnectStatus: status,
+        stripeConnectRequirements: account.requirements ?? null,
+        stripeConnectLastSyncedAt: new Date(),
+      },
+    });
+
+    res.status(200).json({ received: true });
+    return;
   }
 
   res.status(200).json({ received: true });
