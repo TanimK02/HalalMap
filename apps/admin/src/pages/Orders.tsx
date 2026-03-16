@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { api } from '../api';
 
@@ -13,24 +13,52 @@ type Order = {
   items: { quantity: number; menuItem: { name: string }; priceAtOrder: number | string }[];
 };
 
+type Restaurant = { id: string; name: string };
+
+const AUTO_REFRESH_INTERVAL_MS = 30000; // 30 seconds
+
 export default function Orders() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
+  const [restaurantId, setRestaurantId] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [autoRefresh, setAutoRefresh] = useState(false);
   const [message, setMessage] = useState('');
 
-  function load() {
-    const params = statusFilter ? { status: statusFilter } : {};
+  const load = useCallback(() => {
+    const params: Record<string, string> = {};
+    if (statusFilter) params.status = statusFilter;
+    if (restaurantId) params.restaurantId = restaurantId;
+    if (dateFrom) params.from = new Date(dateFrom).toISOString();
+    if (dateTo) params.to = new Date(dateTo + 'T23:59:59.999Z').toISOString();
+
     api
       .get<Order[]>('/admin/orders', { params })
       .then((r) => setOrders(r.data))
       .catch(() => setOrders([]))
       .finally(() => setLoading(false));
-  }
+  }, [statusFilter, restaurantId, dateFrom, dateTo]);
 
   useEffect(() => {
+    api
+      .get<{ id: string; name: string }[]>('/admin/restaurants')
+      .then((r) => setRestaurants(r.data))
+      .catch(() => setRestaurants([]));
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
     load();
-  }, [statusFilter]);
+  }, [load]);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const id = setInterval(load, AUTO_REFRESH_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [autoRefresh, load]);
 
   async function refund(orderId: string) {
     if (!confirm('Issue refund for this order?')) return;
@@ -44,7 +72,7 @@ export default function Orders() {
     }
   }
 
-  if (loading) return <div className="text-text-secondary">Loading...</div>;
+  if (loading && orders.length === 0) return <div className="text-text-secondary">Loading...</div>;
 
   return (
     <div className="space-y-6">
@@ -54,21 +82,75 @@ export default function Orders() {
           {message}
         </div>
       )}
-      <div>
-        <label className="mr-2 text-sm text-text-secondary">Filter by status:</label>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded border border-gray-300 px-3 py-2"
+      <div className="flex flex-wrap items-center gap-4">
+        <div>
+          <label className="mr-2 text-sm text-text-secondary">Status:</label>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="rounded border border-gray-300 px-3 py-2"
+          >
+            <option value="">All</option>
+            <option value="PENDING">Pending</option>
+            <option value="ACCEPTED">Accepted</option>
+            <option value="PREPARING">Preparing</option>
+            <option value="READY">Ready</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+        </div>
+        <div>
+          <label className="mr-2 text-sm text-text-secondary">Restaurant:</label>
+          <select
+            value={restaurantId}
+            onChange={(e) => setRestaurantId(e.target.value)}
+            className="rounded border border-gray-300 px-3 py-2 min-w-[180px]"
+          >
+            <option value="">All restaurants</option>
+            {restaurants.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-text-secondary">From:</label>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="rounded border border-gray-300 px-3 py-2"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-text-secondary">To:</label>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="rounded border border-gray-300 px-3 py-2"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setLoading(true);
+            load();
+          }}
+          className="rounded border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50"
         >
-          <option value="">All</option>
-          <option value="PENDING">Pending</option>
-          <option value="ACCEPTED">Accepted</option>
-          <option value="PREPARING">Preparing</option>
-          <option value="READY">Ready</option>
-          <option value="COMPLETED">Completed</option>
-          <option value="CANCELLED">Cancelled</option>
-        </select>
+          Refresh
+        </button>
+        <label className="flex items-center gap-2 text-sm text-text-secondary">
+          <input
+            type="checkbox"
+            checked={autoRefresh}
+            onChange={(e) => setAutoRefresh(e.target.checked)}
+            className="rounded border-gray-300"
+          />
+          Auto-refresh (30s)
+        </label>
       </div>
       <div className="space-y-4">
         {orders.length === 0 ? (

@@ -1,14 +1,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { api } from '../api';
-
-const HALAL_STATUS_LABELS: Record<string, string> = {
-  CERTIFIED_HALAL: 'Certified Halal',
-  MUSLIM_OWNED: 'Muslim-Owned',
-  HALAL_FRIENDLY: 'Halal-Friendly',
-  PROCLAIMED_HALAL: 'Proclaimed Halal',
-  SOME_HALAL: 'Some Halal',
-};
+import RestaurantDetailPanel, { getCertificateStatus, HALAL_STATUS_LABELS } from '../components/RestaurantDetailPanel';
 
 type Restaurant = {
   id: string;
@@ -28,6 +21,7 @@ export default function Moderation() {
   const [filter, setFilter] = useState<'all' | 'pending'>('pending');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   function load() {
     const params = filter === 'pending' ? { pending: 'true' } : {};
@@ -43,7 +37,12 @@ export default function Moderation() {
     load();
   }, [filter]);
 
-  async function setApproved(id: string, approved: boolean) {
+  function onApproved(id: string, approved: boolean) {
+    setMessage(approved ? 'Restaurant approved.' : 'Restaurant rejected.');
+    load();
+  }
+
+  async function setApprovedFromList(id: string, approved: boolean) {
     setMessage('');
     try {
       await api.patch(`/admin/restaurants/${id}/approve`, { approved });
@@ -82,53 +81,87 @@ export default function Moderation() {
         {restaurants.length === 0 ? (
           <p className="text-text-secondary">No restaurants.</p>
         ) : (
-          restaurants.map((r) => (
-            <div key={r.id} className="rounded border border-gray-200 bg-surface p-4">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <span className="font-medium">{r.name}</span>
-                <span className={`rounded px-2 py-0.5 text-sm ${r.approved ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
-                  {r.approved ? 'Approved' : 'Pending'}
-                </span>
-              </div>
-              <p className="text-sm text-text-secondary">{r.description ?? r.address}</p>
-              <p className="text-sm text-text-secondary">
-                Halal: {(r.halalStatuses ?? []).map((s) => HALAL_STATUS_LABELS[s] ?? s).join(', ') || '—'}
-              </p>
-              <p className="text-sm text-text-secondary">Owner: {r.owner?.email}</p>
-              {r.certificateUrl && (
-                <p className="text-sm">
-                  <a href={r.certificateUrl} target="_blank" rel="noreferrer" className="text-primary underline">
-                    View certificate
-                  </a>
-                  {r.certificateExpiresAt && (
-                    <span className="ml-2 text-text-secondary">
-                      Expires: {new Date(r.certificateExpiresAt).toLocaleDateString()}
+          restaurants.map((r) => {
+            const certStatus = getCertificateStatus(r.certificateExpiresAt);
+            return (
+              <div key={r.id} className="rounded border border-gray-200 bg-surface p-4">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium">{r.name}</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {certStatus.status !== 'none' && (
+                      <span
+                        className={`rounded px-2 py-0.5 text-sm ${
+                          certStatus.status === 'expired'
+                            ? 'bg-red-100 text-red-800'
+                            : certStatus.status === 'expiring_soon'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-green-100 text-green-800'
+                        }`}
+                      >
+                        {certStatus.label}
+                      </span>
+                    )}
+                    <span className={`rounded px-2 py-0.5 text-sm ${r.approved ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
+                      {r.approved ? 'Approved' : 'Pending'}
                     </span>
-                  )}
+                  </div>
+                </div>
+                <p className="text-sm text-text-secondary">{r.description ?? r.address}</p>
+                <p className="text-sm text-text-secondary">
+                  Halal: {(r.halalStatuses ?? []).map((s) => HALAL_STATUS_LABELS[s] ?? s).join(', ') || '—'}
                 </p>
-              )}
-              {!r.approved && (
-                <div className="mt-3 flex gap-2">
+                <p className="text-sm text-text-secondary">Owner: {r.owner?.email}</p>
+                {r.certificateUrl && (
+                  <p className="text-sm">
+                    <a href={r.certificateUrl} target="_blank" rel="noreferrer" className="text-primary underline">
+                      View certificate
+                    </a>
+                    {r.certificateExpiresAt && (
+                      <span className="ml-2 text-text-secondary">
+                        Expires: {new Date(r.certificateExpiresAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </p>
+                )}
+                <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => setApproved(r.id, true)}
-                    className="rounded bg-primary px-3 py-1.5 text-sm text-white hover:bg-primary/90"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setApproved(r.id, false)}
+                    onClick={() => setDetailId(r.id)}
                     className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50"
                   >
-                    Reject
+                    View
                   </button>
+                  {!r.approved && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setApprovedFromList(r.id, true)}
+                        className="rounded bg-primary px-3 py-1.5 text-sm text-white hover:bg-primary/90"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setApprovedFromList(r.id, false)}
+                        className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50"
+                      >
+                        Reject
+                      </button>
+                    </>
+                  )}
                 </div>
-              )}
-            </div>
-          ))
+              </div>
+            );
+          })
         )}
       </div>
+
+      <RestaurantDetailPanel
+        restaurantId={detailId}
+        onClose={() => setDetailId(null)}
+        showApproveButtons
+        onApproved={onApproved}
+      />
     </div>
   );
 }

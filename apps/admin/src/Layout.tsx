@@ -31,6 +31,14 @@ export default function Layout() {
                 Add restaurant
               </NavLink>
               <NavLink
+                to="/restaurants"
+                className={({ isActive }) =>
+                  isActive ? 'text-primary font-medium' : 'text-text-secondary hover:text-primary'
+                }
+              >
+                Restaurants
+              </NavLink>
+              <NavLink
                 to="/users"
                 className={({ isActive }) =>
                   isActive ? 'text-primary font-medium' : 'text-text-secondary hover:text-primary'

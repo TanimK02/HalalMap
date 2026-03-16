@@ -2,14 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { api } from '../api';
-
-const HALAL_STATUS_LABELS: Record<string, string> = {
-  CERTIFIED_HALAL: 'Certified Halal',
-  MUSLIM_OWNED: 'Muslim-Owned',
-  HALAL_FRIENDLY: 'Halal-Friendly',
-  PROCLAIMED_HALAL: 'Proclaimed Halal',
-  SOME_HALAL: 'Some Halal',
-};
+import { HALAL_STATUS_LABELS } from '../components/RestaurantDetailPanel';
 
 const HALAL_STATUS_VALUES = Object.keys(HALAL_STATUS_LABELS);
 
@@ -33,7 +26,7 @@ export default function AddRestaurant() {
   });
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
-    const { name, value, type } = e.target;
+    const { name, value } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
     if (name === 'restaurantOffersPickup' || name === 'restaurantOffersDelivery') {
       setForm((prev) => ({ ...prev, [name]: checked }));
@@ -86,11 +79,11 @@ export default function AddRestaurant() {
         restaurantOffersPickup: true,
         restaurantOffersDelivery: false,
       });
-    } catch (err) {
+    } catch (err: unknown) {
       const msg =
         axios.isAxiosError(err) && err.response?.data?.error
           ? err.response.data.error
-          : err.response?.data?.errors
+          : axios.isAxiosError(err) && err.response?.data?.errors
             ? (err.response.data.errors as { msg?: string }[]).map((e) => e.msg).join(', ')
             : 'Failed to create restaurant.';
       setError(msg);
