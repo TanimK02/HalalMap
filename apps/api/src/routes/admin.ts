@@ -156,13 +156,29 @@ adminRouter.patch(
 );
 
 // List users
-adminRouter.get('/users', async (_req: Request, res: Response) => {
-  const users = await prisma.user.findMany({
-    select: { id: true, name: true, email: true, role: true, createdAt: true },
-    orderBy: { createdAt: 'desc' },
-  });
-  return res.json(users);
-});
+adminRouter.get(
+  '/users',
+  [query('role').optional().isIn(['CUSTOMER', 'RESTAURANT_OWNER', 'ADMIN'])],
+  async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const role = req.query.role as string | undefined;
+    const users = await prisma.user.findMany({
+      where: role ? { role: role as import('@prisma/client').UserRole } : undefined,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        restaurant: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return res.json(users);
+  }
+);
 
 // List all orders
 adminRouter.get(
@@ -170,11 +186,25 @@ adminRouter.get(
   [
     query('status').optional().isIn(['PENDING', 'ACCEPTED', 'PREPARING', 'READY', 'COMPLETED', 'CANCELLED']),
     query('restaurantId').optional().trim(),
+    query('from').optional().isISO8601(),
+    query('to').optional().isISO8601(),
   ],
   async (req: Request, res: Response) => {
-    const where: { status?: import('@prisma/client').OrderStatus; restaurantId?: string } = {};
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const where: {
+      status?: import('@prisma/client').OrderStatus;
+      restaurantId?: string;
+      createdAt?: { gte?: Date; lte?: Date };
+    } = {};
     if (req.query.status) where.status = req.query.status as import('@prisma/client').OrderStatus;
     if (req.query.restaurantId) where.restaurantId = req.query.restaurantId as string;
+    const from = req.query.from as string | undefined;
+    const to = req.query.to as string | undefined;
+    if (from) where.createdAt = { ...where.createdAt, gte: new Date(from) };
+    if (to) where.createdAt = { ...where.createdAt, lte: new Date(to) };
+
     const orders = await prisma.order.findMany({
       where,
       include: {
