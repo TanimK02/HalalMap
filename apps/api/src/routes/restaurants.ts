@@ -6,6 +6,7 @@ import { isDeliveryEnabled, isStripeConnectEnabled } from '../lib/config.js';
 import Stripe from 'stripe';
 import { geocode, haversineMiles } from '../lib/geocode.js';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth.js';
+import { isS3Configured, getPresignedUploadUrl } from '../lib/s3.js';
 import type { HalalStatus } from '@halal-map/shared';
 
 const HALAL_STATUS_VALUES: HalalStatus[] = [
@@ -153,6 +154,42 @@ restaurantsRouter.get(
     });
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
     return res.json(restaurant);
+  }
+);
+
+// Owner: get presigned S3 upload URL for menu item image
+restaurantsRouter.post(
+  '/me/restaurant/upload-url',
+  requireAuth,
+  requireRole('RESTAURANT_OWNER'),
+  [
+    body('filename').trim().notEmpty().withMessage('filename is required'),
+    body('contentType').trim().notEmpty().withMessage('contentType is required'),
+  ],
+  async (req: AuthRequest, res: Response) => {
+    if (!isS3Configured()) {
+      return res.status(503).json({ error: 'Image upload is not configured' });
+    }
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { ownerId: req.userId! },
+    });
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+
+    const { filename, contentType } = req.body as { filename: string; contentType: string };
+    try {
+      const { uploadUrl, publicUrl } = await getPresignedUploadUrl(
+        `menu-items/${restaurant.id}`,
+        filename,
+        contentType
+      );
+      return res.json({ uploadUrl, publicUrl });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to generate upload URL';
+      return res.status(400).json({ error: message });
+    }
   }
 );
 

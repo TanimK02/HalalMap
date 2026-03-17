@@ -84,3 +84,34 @@ export type Order = {
   items: { quantity: number; menuItem: MenuItem; priceAtOrder: number | string }[];
   deliveryAddress?: { street: string; city: string; postalCode: string } | null;
 };
+
+/** Get presigned upload URL and public URL for a menu item image. */
+export async function getUploadUrl(
+  filename: string,
+  contentType: string
+): Promise<{ uploadUrl: string; publicUrl: string }> {
+  const { data } = await api.post<{ uploadUrl: string; publicUrl: string }>(
+    '/restaurants/me/restaurant/upload-url',
+    { filename, contentType }
+  );
+  return data;
+}
+
+/** Upload a file to a presigned PUT URL. */
+export async function uploadFileToUrl(file: File, uploadUrl: string): Promise<void> {
+  const res = await fetch(uploadUrl, {
+    method: 'PUT',
+    body: file,
+    headers: { 'Content-Type': file.type },
+  });
+  if (!res.ok) {
+    throw new Error(`Upload failed: ${res.status}`);
+  }
+}
+
+/** Request presigned URL, upload file, and return the public URL to store as imageUrl. */
+export async function uploadMenuItemImage(file: File): Promise<string> {
+  const { uploadUrl, publicUrl } = await getUploadUrl(file.name, file.type);
+  await uploadFileToUrl(file, uploadUrl);
+  return publicUrl;
+}
