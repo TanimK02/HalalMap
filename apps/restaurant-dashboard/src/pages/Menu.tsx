@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
-import { api, type Restaurant, type MenuCategory, type MenuItem } from '../api';
+import axios from 'axios';
+import { api, uploadMenuItemImage, type Restaurant, type MenuCategory, type MenuItem } from '../api';
 import { useConfig } from '../ConfigContext';
+
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+const ACCEPT_IMAGES = 'image/jpeg,image/png,image/webp,image/gif';
 
 /** Restrict input to price format: digits, optional decimal, max 2 decimal places (e.g. 12, 12.99, 12.1, 12.10). */
 function formatPriceInput(value: string): string {
@@ -22,9 +26,10 @@ export default function Menu() {
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newItem, setNewItem] = useState<Partial<MenuItem> & { categoryId?: string }>({});
-  const [editImageUrl, setEditImageUrl] = useState('');
   const [editItemForm, setEditItemForm] = useState<{ name: string; description: string; price: string; imageUrl: string }>({ name: '', description: '', price: '', imageUrl: '' });
   const [reordering, setReordering] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState<'add' | 'edit' | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   function load() {
     api
@@ -96,7 +101,6 @@ export default function Menu() {
     try {
       await api.patch(`/restaurants/me/restaurant/items/${id}`, data);
       setEditingItem(null);
-      setEditImageUrl('');
       setEditItemForm({ name: '', description: '', price: '', imageUrl: '' });
       load();
     } catch (e) {
@@ -120,11 +124,9 @@ export default function Menu() {
   function startEditingItem(item: MenuItem) {
     if (editingItem === item.id) {
       setEditingItem(null);
-      setEditImageUrl('');
       setEditItemForm({ name: '', description: '', price: '', imageUrl: '' });
     } else {
       setEditingItem(item.id);
-      setEditImageUrl(item.imageUrl ?? '');
       setEditItemForm({
         name: item.name ?? '',
         description: item.description ?? '',
@@ -221,6 +223,32 @@ export default function Menu() {
       load();
     } finally {
       setReordering(false);
+    }
+  }
+
+  async function handleImageUpload(file: File, form: 'add' | 'edit') {
+    setUploadError(null);
+    if (file.size > MAX_IMAGE_SIZE) {
+      setUploadError('Image must be under 5MB');
+      return;
+    }
+    if (!ACCEPT_IMAGES.split(',').includes(file.type)) {
+      setUploadError('Use JPEG, PNG, WebP or GIF');
+      return;
+    }
+    setUploadingImage(form);
+    try {
+      const url = await uploadMenuItemImage(file);
+      if (form === 'add') {
+        setNewItem((n) => ({ ...n, imageUrl: url }));
+      } else {
+        setEditItemForm((f) => ({ ...f, imageUrl: url }));
+      }
+    } catch (e: unknown) {
+      const status = axios.isAxiosError(e) ? e.response?.status : 0;
+      setUploadError(status === 503 ? 'Image upload is not configured' : 'Upload failed');
+    } finally {
+      setUploadingImage(null);
     }
   }
 
@@ -453,6 +481,25 @@ export default function Menu() {
                       placeholder="Image URL"
                       className="min-w-[180px] flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
                     />
+                    <label className="flex items-center gap-1 text-sm shrink-0">
+                      <input
+                        type="file"
+                        accept={ACCEPT_IMAGES}
+                        className="sr-only"
+                        disabled={uploadingImage !== null}
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) handleImageUpload(f, 'edit');
+                          e.target.value = '';
+                        }}
+                      />
+                      <span className="rounded border border-gray-300 px-2 py-1 bg-gray-50 cursor-pointer hover:bg-gray-100 text-text-secondary">
+                        {uploadingImage === 'edit' ? 'Uploading...' : 'Upload image'}
+                      </span>
+                    </label>
+                    {uploadError && uploadingImage === null && (
+                      <span className="text-sm text-amber-600">{uploadError}</span>
+                    )}
                     <button
                       type="button"
                       onClick={() => saveEditItem(item)}
@@ -462,7 +509,7 @@ export default function Menu() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setEditingItem(null); setEditImageUrl(''); setEditItemForm({ name: '', description: '', price: '', imageUrl: '' }); }}
+                      onClick={() => { setEditingItem(null); setEditItemForm({ name: '', description: '', price: '', imageUrl: '' }); }}
                       className="text-sm text-text-secondary"
                     >
                       Cancel
@@ -507,6 +554,25 @@ export default function Menu() {
                 onChange={(e) => setNewItem((n) => ({ ...n, imageUrl: e.target.value || undefined }))}
                 className="min-w-[200px] flex-1 rounded border border-gray-300 px-2 py-1"
               />
+              <label className="flex items-center gap-1 text-sm shrink-0">
+                <input
+                  type="file"
+                  accept={ACCEPT_IMAGES}
+                  className="sr-only"
+                  disabled={uploadingImage !== null}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleImageUpload(f, 'add');
+                    e.target.value = '';
+                  }}
+                />
+                <span className="rounded border border-gray-300 px-2 py-1 bg-gray-50 cursor-pointer hover:bg-gray-100 text-text-secondary">
+                  {uploadingImage === 'add' ? 'Uploading...' : 'Upload image'}
+                </span>
+              </label>
+              {uploadError && uploadingImage === null && (
+                <span className="text-sm text-amber-600">{uploadError}</span>
+              )}
               <label className="flex items-center gap-1 text-sm">
                 <input
                   type="checkbox"
