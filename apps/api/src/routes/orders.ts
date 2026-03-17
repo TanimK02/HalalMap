@@ -3,6 +3,7 @@ import { body, param, query, validationResult } from 'express-validator';
 import Stripe from 'stripe';
 import { prisma } from '../lib/prisma.js';
 import { getEffectiveFeeCents, getPlatformFeeCents } from '../lib/fees.js';
+import { getTaxCents, type TaxJurisdiction } from '../lib/tax.js';
 import { isDeliveryEnabled, isStripeConnectEnabled } from '../lib/config.js';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth.js';
 import type { DeliveryType, OrderStatus } from '@halal-map/shared';
@@ -67,11 +68,13 @@ ordersRouter.post(
       return res.status(400).json({ error: 'Delivery address required for delivery' });
     }
 
+    let deliveryAddress: { state: string | null; postalCode: string } | null = null;
     if (deliveryType === 'DELIVERY' && deliveryAddressId) {
       const addr = await prisma.address.findFirst({
         where: { id: deliveryAddressId, userId: req.userId! },
       });
       if (!addr) return res.status(400).json({ error: 'Invalid delivery address' });
+      deliveryAddress = { state: addr.state, postalCode: addr.postalCode };
     }
 
     const allItems = restaurant.menuCategories.flatMap((c) => c.items);
@@ -107,7 +110,13 @@ ordersRouter.post(
 
     const feeCents = getEffectiveFeeCents(restaurant, deliveryType, subtotalCents);
     const platformFeeCents = getPlatformFeeCents(subtotalCents);
-    const totalCents = subtotalCents + feeCents;
+    const taxableAmountCents = subtotalCents + feeCents;
+    const jurisdiction: TaxJurisdiction =
+      deliveryType === 'DELIVERY' && deliveryAddress
+        ? { state: deliveryAddress.state, postalCode: deliveryAddress.postalCode, country: 'US' }
+        : { state: restaurant.state, postalCode: restaurant.postalCode, country: 'US' };
+    const taxCents = getTaxCents(taxableAmountCents, jurisdiction);
+    const totalCents = taxableAmountCents + taxCents;
     const totalPrice = totalCents / 100;
 
     if (stripe) {
@@ -125,6 +134,7 @@ ordersRouter.post(
         totalPrice: String(totalPrice),
         feeCents: String(feeCents),
         platformFeeCents: String(platformFeeCents),
+        taxCents: String(taxCents),
       };
       const maxMetaVal = 500;
       if (itemsJson.length <= maxMetaVal) {
@@ -138,7 +148,7 @@ ordersRouter.post(
       const useConnect = isStripeConnectEnabled() && !!restaurant.stripeConnectAccountId && restaurant.stripeConnectStatus === 'ACTIVE';
 
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: totalCents,
+        amount: Math.round(totalCents),
         currency: 'usd',
         metadata,
         payment_method_types: ['card', 'link'],
@@ -165,6 +175,7 @@ ordersRouter.post(
         totalPrice: new Decimal(totalPrice),
         feeCents,
         platformFeeCents,
+        taxCents,
         stripeConnectAccountId: restaurant.stripeConnectAccountId ?? null,
         deliveryType,
         deliveryAddressId: deliveryType === 'DELIVERY' ? deliveryAddressId : null,
@@ -186,6 +197,55 @@ ordersRouter.post(
       },
       clientSecret: null,
     });
+  }
+);
+
+// Customer: tax estimate for cart (subtotal + fee -> tax). Used to show Tax line and total before checkout.
+ordersRouter.post(
+  '/tax-estimate',
+  requireAuth,
+  [
+    body('restaurantId').trim().notEmpty(),
+    body('deliveryType').isIn(['PICKUP', 'DELIVERY']),
+    body('deliveryAddressId').optional().trim(),
+    body('subtotalCents').isInt({ min: 1 }),
+  ],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const { restaurantId, deliveryType, deliveryAddressId, subtotalCents } = req.body as {
+      restaurantId: string;
+      deliveryType: DeliveryType;
+      deliveryAddressId?: string;
+      subtotalCents: number;
+    };
+
+    if (deliveryType === 'DELIVERY' && !deliveryAddressId) {
+      return res.status(400).json({ error: 'Delivery address required for delivery tax estimate' });
+    }
+
+    const restaurant = await prisma.restaurant.findFirst({
+      where: { id: restaurantId, approved: true },
+    });
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+
+    const feeCents = getEffectiveFeeCents(restaurant, deliveryType, subtotalCents);
+    const taxableAmountCents = subtotalCents + feeCents;
+
+    let jurisdiction: TaxJurisdiction;
+    if (deliveryType === 'DELIVERY' && deliveryAddressId) {
+      const addr = await prisma.address.findFirst({
+        where: { id: deliveryAddressId, userId: req.userId! },
+      });
+      if (!addr) return res.status(400).json({ error: 'Invalid delivery address' });
+      jurisdiction = { state: addr.state, postalCode: addr.postalCode, country: 'US' };
+    } else {
+      jurisdiction = { state: restaurant.state, postalCode: restaurant.postalCode, country: 'US' };
+    }
+
+    const taxCents = getTaxCents(taxableAmountCents, jurisdiction);
+    return res.json({ taxCents });
   }
 );
 
@@ -247,6 +307,7 @@ ordersRouter.post(
     const totalPriceStr = meta.totalPrice;
     const feeCentsStr = meta.feeCents;
     const platformFeeCentsStr = meta.platformFeeCents;
+    const taxCentsStr = meta.taxCents;
     const itemsMeta = parseItemsFromPaymentMeta(meta);
     if (!userId || !restaurantId || totalPriceStr === undefined || itemsMeta.length === 0) {
       return res.status(400).json({ error: 'Invalid payment intent metadata' });
@@ -256,11 +317,17 @@ ordersRouter.post(
     const feeCents = feeCentsStr != null ? parseInt(feeCentsStr, 10) : 0;
     const platformFeeCents =
       platformFeeCentsStr != null ? parseInt(platformFeeCentsStr, 10) : 0;
+    const taxCents = taxCentsStr != null ? parseInt(taxCentsStr, 10) : 0;
     const orderItems = itemsMeta.map((item) => ({
       menuItemId: item.menuItemId,
       quantity: item.quantity,
       priceAtOrder: new Decimal(item.priceAtOrder),
     }));
+
+    const stripeConnectAccountId =
+      paymentIntent.transfer_data && typeof paymentIntent.transfer_data.destination === 'string'
+        ? paymentIntent.transfer_data.destination
+        : null;
 
     const order = await prisma.order.create({
       data: {
@@ -270,9 +337,11 @@ ordersRouter.post(
         totalPrice,
         feeCents: Number.isNaN(feeCents) ? 0 : feeCents,
         platformFeeCents: Number.isNaN(platformFeeCents) ? 0 : platformFeeCents,
+        taxCents: Number.isNaN(taxCents) ? 0 : taxCents,
         deliveryType,
         deliveryAddressId,
         stripePaymentIntentId: paymentIntentId,
+        stripeConnectAccountId,
         paymentConfirmedAt: new Date(),
         items: { create: orderItems },
       },

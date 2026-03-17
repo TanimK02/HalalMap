@@ -83,6 +83,8 @@ model Restaurant {
   description          String?
   phone                String?
   address              String
+  state                String?   // for pickup tax jurisdiction
+  postalCode           String?   // for pickup tax jurisdiction
   latitude             Float?
   longitude            Float?
   halalStatuses       HalalStatus[] @default([])
@@ -158,6 +160,7 @@ model Order {
   totalPrice             Decimal       @db.Decimal(10, 2)
   feeCents               Int           @default(0)
   platformFeeCents       Int           @default(0)
+  taxCents               Int           @default(0)
   deliveryType           DeliveryType
   deliveryAddressId      String?
   deliveryAddress        Address?      @relation("DeliveryAddress", fields: [deliveryAddressId], references: [id])

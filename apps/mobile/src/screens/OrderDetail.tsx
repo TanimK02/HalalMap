@@ -166,22 +166,36 @@ export default function OrderDetail() {
             </Text>
           </View>
         ))}
-        {(order.feeCents ?? 0) > 0 && (
+        {((order.feeCents ?? 0) > 0 || (order.taxCents ?? 0) > 0) && (
           <>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Subtotal</Text>
               <Text style={styles.summaryValue}>
-                ${(Number(order.totalPrice) - (order.feeCents ?? 0) / 100).toFixed(2)}
+                ${(
+                  Number(order.totalPrice) -
+                  (order.feeCents ?? 0) / 100 -
+                  (order.taxCents ?? 0) / 100
+                ).toFixed(2)}
               </Text>
             </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>
-                {order.deliveryType === 'PICKUP' ? 'Pickup fee' : 'Delivery fee'}
-              </Text>
-              <Text style={styles.summaryValue}>
-                ${((order.feeCents ?? 0) / 100).toFixed(2)}
-              </Text>
-            </View>
+            {(order.feeCents ?? 0) > 0 && (
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>
+                  {order.deliveryType === 'PICKUP' ? 'Pickup fee' : 'Delivery fee'}
+                </Text>
+                <Text style={styles.summaryValue}>
+                  ${((order.feeCents ?? 0) / 100).toFixed(2)}
+                </Text>
+              </View>
+            )}
+            {(order.taxCents ?? 0) > 0 && (
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Tax</Text>
+                <Text style={styles.summaryValue}>
+                  ${((order.taxCents ?? 0) / 100).toFixed(2)}
+                </Text>
+              </View>
+            )}
           </>
         )}
         <View style={styles.totalRow}>

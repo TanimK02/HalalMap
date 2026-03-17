@@ -75,6 +75,7 @@ webhooksRouter.post('/stripe', async (req: Request, res: Response) => {
     const totalPriceStr = meta.totalPrice;
     const feeCentsStr = meta.feeCents;
     const platformFeeCentsStr = meta.platformFeeCents;
+    const taxCentsStr = meta.taxCents;
     const itemsMeta = parseItemsFromMetadata(meta);
 
     if (
@@ -98,6 +99,7 @@ webhooksRouter.post('/stripe', async (req: Request, res: Response) => {
     const feeCents = feeCentsStr != null ? parseInt(feeCentsStr, 10) : 0;
     const platformFeeCents =
       platformFeeCentsStr != null ? parseInt(platformFeeCentsStr, 10) : 0;
+    const taxCents = taxCentsStr != null ? parseInt(taxCentsStr, 10) : 0;
     const orderItems = itemsMeta.map((item) => ({
       menuItemId: item.menuItemId,
       quantity: item.quantity,
@@ -117,6 +119,7 @@ webhooksRouter.post('/stripe', async (req: Request, res: Response) => {
         totalPrice,
         feeCents: Number.isNaN(feeCents) ? 0 : feeCents,
         platformFeeCents: Number.isNaN(platformFeeCents) ? 0 : platformFeeCents,
+        taxCents: Number.isNaN(taxCents) ? 0 : taxCents,
         deliveryType,
         deliveryAddressId,
         stripePaymentIntentId: paymentIntent.id,
@@ -131,7 +134,7 @@ webhooksRouter.post('/stripe', async (req: Request, res: Response) => {
     return;
   }
 
-  if (event.type === 'account.updated'') {
+  if (event.type === 'account.updated') {
     const account = event.data.object as Stripe.Account;
     const restaurantId = typeof account.metadata?.restaurantId === 'string' ? account.metadata.restaurantId : null;
     if (!restaurantId) {

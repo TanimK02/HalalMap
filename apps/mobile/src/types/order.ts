@@ -5,6 +5,7 @@ export type OrderDetailData = {
   status: string;
   totalPrice: number | string;
   feeCents?: number;
+  taxCents?: number;
   deliveryType: string;
   createdAt: string;
   restaurant: {

@@ -29,6 +29,7 @@ export default function Cart() {
   const [deliveryAddressId, setDeliveryAddressId] = useState<string | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [restaurantFees, setRestaurantFees] = useState<RestaurantFees | null>(null);
+  const [taxCents, setTaxCents] = useState<number>(0);
   const [loadingAddresses, setLoadingAddresses] = useState(false);
   const [showAddAddressForm, setShowAddAddressForm] = useState(false);
   const [showAddressList, setShowAddressList] = useState(false);
@@ -45,7 +46,7 @@ export default function Cart() {
       ? restaurantFees.pickupFee
       : restaurantFees?.deliveryFee;
   const feeCents = feeStructure ? computeFeeCents(subtotalCents, feeStructure) : 0;
-  const totalWithFee = (subtotalCents + feeCents) / 100;
+  const totalWithFeeAndTax = (subtotalCents + feeCents + taxCents) / 100;
 
   useEffect(() => {
     if (restaurantId && items.length > 0) {
@@ -80,6 +81,27 @@ export default function Cart() {
       setShowAddAddressForm(false);
     }
   }, [deliveryType, token]);
+
+  useEffect(() => {
+    const canEstimateTax =
+      token &&
+      restaurantId &&
+      subtotalCents > 0 &&
+      (deliveryType === 'PICKUP' || (deliveryType === 'DELIVERY' && deliveryAddressId));
+    if (!canEstimateTax) {
+      setTaxCents(0);
+      return;
+    }
+    api
+      .post<{ taxCents: number }>('/orders/tax-estimate', {
+        restaurantId,
+        deliveryType,
+        deliveryAddressId: deliveryType === 'DELIVERY' ? deliveryAddressId : undefined,
+        subtotalCents,
+      })
+      .then((r) => setTaxCents(r.data.taxCents))
+      .catch(() => setTaxCents(0));
+  }, [token, restaurantId, subtotalCents, deliveryType, deliveryAddressId]);
 
   useEffect(() => {
     if (!enableDelivery) setDeliveryType('PICKUP');
@@ -178,23 +200,31 @@ export default function Cart() {
           onCancel={() => setShowAddAddressForm(false)}
         />
       )}
-      {feeCents > 0 && (
+      {(feeCents > 0 || taxCents > 0) && (
         <>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Subtotal</Text>
             <Text style={styles.summaryValue}>${subtotal.toFixed(2)}</Text>
           </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>
-              {deliveryType === 'PICKUP' || !enableDelivery ? 'Pickup fee' : 'Delivery fee'}
-            </Text>
-            <Text style={styles.summaryValue}>${(feeCents / 100).toFixed(2)}</Text>
-          </View>
+          {feeCents > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>
+                {deliveryType === 'PICKUP' || !enableDelivery ? 'Pickup fee' : 'Delivery fee'}
+              </Text>
+              <Text style={styles.summaryValue}>${(feeCents / 100).toFixed(2)}</Text>
+            </View>
+          )}
+          {taxCents > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Tax</Text>
+              <Text style={styles.summaryValue}>${(taxCents / 100).toFixed(2)}</Text>
+            </View>
+          )}
         </>
       )}
       <View style={styles.totalRow}>
         <Text style={styles.totalLabel}>Total</Text>
-        <Text style={styles.totalValue}>${totalWithFee.toFixed(2)}</Text>
+        <Text style={styles.totalValue}>${totalWithFeeAndTax.toFixed(2)}</Text>
       </View>
       <TouchableOpacity
         style={[styles.checkoutBtn, checkoutLoading && styles.checkoutBtnDisabled]}
