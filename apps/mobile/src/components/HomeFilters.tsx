@@ -10,16 +10,14 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { brand, HALAL_LABELS } from '../theme';
 import { RadiusSlider } from './RadiusSlider';
-import type { RestaurantTag } from '../types/restaurant';
 
 export type HomeFiltersProps = {
   search: string;
   onSearchChange: (v: string) => void;
   halalFilters: string[];
   onToggleHalalFilter: (value: string) => void;
-  tagCatalog: RestaurantTag[];
-  tagFilters: string[];
-  onToggleTagFilter: (tagId: string) => void;
+  halalExpanded: boolean;
+  onHalalExpandedChange: (v: boolean) => void;
   radiusMiles: number;
   onRadiusChange: (v: number) => void;
   distanceExpanded: boolean;
@@ -42,9 +40,8 @@ export function HomeFilters({
   onSearchChange,
   halalFilters,
   onToggleHalalFilter,
-  tagCatalog,
-  tagFilters,
-  onToggleTagFilter,
+  halalExpanded,
+  onHalalExpandedChange,
   radiusMiles,
   onRadiusChange,
   distanceExpanded,
@@ -61,11 +58,14 @@ export function HomeFilters({
   radiusMin = 1,
   radiusMax = 50,
 }: HomeFiltersProps) {
+  const halalSummary =
+    halalFilters.length === 0 ? 'All' : `${halalFilters.length} selected`;
+
   return (
     <View style={styles.filters}>
       <TextInput
         style={styles.search}
-        placeholder="Search restaurants..."
+        placeholder="Search by name or cuisine..."
         placeholderTextColor={brand.textSecondary}
         value={search}
         onChangeText={onSearchChange}
@@ -95,64 +95,69 @@ export function HomeFilters({
           </View>
         </View>
       )}
-      <FlatList
-        horizontal
-        data={[
-          { value: '', label: 'All' },
-          ...Object.entries(HALAL_LABELS).map(([value, label]) => ({ value, label })),
-        ]}
-        keyExtractor={(item) => item.value || 'all'}
-        renderItem={({ item }) => {
-          const isActive = item.value ? halalFilters.includes(item.value) : halalFilters.length === 0;
-          return (
-            <TouchableOpacity
-              style={[
-                styles.filterChip,
-                isActive && styles.filterChipActive,
-              ]}
-              onPress={() => onToggleHalalFilter(item.value)}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  isActive && styles.filterChipTextActive,
-                ]}
-              >
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        }}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterList}
-      />
-      {tagCatalog.length > 0 ? (
-        <View style={styles.tagSection}>
-          <Text style={styles.tagSectionLabel}>Tags</Text>
-          <FlatList
-            horizontal
-            data={tagCatalog}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => {
-              const isActive = tagFilters.includes(item.id);
-              return (
-                <TouchableOpacity
-                  style={[styles.filterChip, isActive && styles.filterChipActive]}
-                  onPress={() => onToggleTagFilter(item.id)}
-                >
-                  <Text
-                    style={[styles.filterChipText, isActive && styles.filterChipTextActive]}
-                  >
-                    {item.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            }}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterList}
-          />
+      <TouchableOpacity
+        style={[styles.expandButton, halalExpanded && styles.expandButtonActive]}
+        onPress={() => onHalalExpandedChange(!halalExpanded)}
+        activeOpacity={0.7}
+      >
+        <Ionicons
+          name="shield-checkmark-outline"
+          size={18}
+          color={halalExpanded ? '#fff' : brand.textPrimary}
+          style={styles.expandButtonIcon}
+        />
+        <View style={styles.expandButtonMiddle}>
+          <Text
+            style={[
+              styles.expandButtonText,
+              halalExpanded && styles.expandButtonTextActive,
+            ]}
+          >
+            Halal types
+          </Text>
         </View>
-      ) : null}
+        <Text
+          style={[
+            styles.expandButtonSummary,
+            halalExpanded && styles.expandButtonSummaryActive,
+          ]}
+        >
+          {halalSummary}
+        </Text>
+      </TouchableOpacity>
+      {halalExpanded && (
+        <FlatList
+          horizontal
+          data={[
+            { value: '', label: 'All' },
+            ...Object.entries(HALAL_LABELS).map(([value, label]) => ({ value, label })),
+          ]}
+          keyExtractor={(item) => item.value || 'all'}
+          renderItem={({ item }) => {
+            const isActive = item.value ? halalFilters.includes(item.value) : halalFilters.length === 0;
+            return (
+              <TouchableOpacity
+                style={[
+                  styles.filterChip,
+                  isActive && styles.filterChipActive,
+                ]}
+                onPress={() => onToggleHalalFilter(item.value)}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    isActive && styles.filterChipTextActive,
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          }}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.halalChipList}
+        />
+      )}
       {hasDistanceData && (
         <>
           <TouchableOpacity
@@ -236,14 +241,29 @@ const styles = StyleSheet.create({
   },
   manualButtonDisabled: { opacity: 0.6 },
   manualButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  filterList: { gap: 8 },
-  tagSection: { marginTop: 10 },
-  tagSectionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: brand.textSecondary,
-    marginBottom: 6,
+  expandButton: {
+    alignSelf: 'stretch',
+    marginTop: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#d1d5db',
+    backgroundColor: brand.surface,
   },
+  expandButtonActive: {
+    borderColor: brand.primary,
+    backgroundColor: brand.primary,
+  },
+  expandButtonIcon: { marginRight: 8 },
+  expandButtonMiddle: { flex: 1 },
+  expandButtonText: { fontSize: 14, fontWeight: '600', color: brand.textPrimary },
+  expandButtonTextActive: { color: '#fff' },
+  expandButtonSummary: { fontSize: 13, color: brand.textSecondary, fontWeight: '500' },
+  expandButtonSummaryActive: { color: 'rgba(255,255,255,0.9)' },
+  halalChipList: { gap: 8, marginTop: 10, paddingBottom: 2 },
   filterChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,

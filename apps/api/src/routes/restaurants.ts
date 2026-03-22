@@ -83,6 +83,19 @@ restaurantsRouter.get(
         OR: [
           { name: { contains: search, mode: 'insensitive' } },
           { description: { contains: search, mode: 'insensitive' } },
+          {
+            publishedTags: {
+              some: {
+                tag: {
+                  active: true,
+                  OR: [
+                    { label: { contains: search, mode: 'insensitive' } },
+                    { slug: { contains: search, mode: 'insensitive' } },
+                  ],
+                },
+              },
+            },
+          },
         ],
       });
     }
