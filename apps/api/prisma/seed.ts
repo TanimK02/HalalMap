@@ -4,6 +4,19 @@ import bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
+  /** One canonical tag per seeded restaurant (re-runnable: replaces published tags for that row). */
+  async function setRestaurantSeedTag(restaurantId: string, slug: string) {
+    const tag = await prisma.tag.findUnique({ where: { slug } });
+    if (!tag) {
+      console.warn(`Seed: tag slug not found: ${slug}`);
+      return;
+    }
+    await prisma.restaurantPublishedTag.deleteMany({ where: { restaurantId } });
+    await prisma.restaurantPublishedTag.create({
+      data: { restaurantId, tagId: tag.id },
+    });
+  }
+
   const adminHash = await bcrypt.hash('admin123', 10);
   const admin = await prisma.user.upsert({
     where: { email: 'admin@halalmap.com' },
@@ -23,6 +36,14 @@ async function main() {
     { slug: 'middle-eastern', label: 'Middle Eastern', sortOrder: 2 },
     { slug: 'fast-food', label: 'Fast food', sortOrder: 3 },
     { slug: 'family-friendly', label: 'Family-friendly', sortOrder: 4 },
+    { slug: 'lebanese', label: 'Lebanese', sortOrder: 5 },
+    { slug: 'turkish', label: 'Turkish', sortOrder: 6 },
+    { slug: 'afghan', label: 'Afghan', sortOrder: 7 },
+    { slug: 'bangladeshi', label: 'Bangladeshi', sortOrder: 8 },
+    { slug: 'somali', label: 'Somali', sortOrder: 9 },
+    { slug: 'persian', label: 'Persian', sortOrder: 10 },
+    { slug: 'fusion', label: 'Fusion', sortOrder: 11 },
+    { slug: 'indonesian', label: 'Indonesian', sortOrder: 12 },
   ];
   for (const t of tagDefs) {
     await prisma.tag.upsert({
@@ -94,19 +115,7 @@ async function main() {
     }
   }
 
-  const indianTag = await prisma.tag.findUnique({ where: { slug: 'indian' } });
-  if (indianTag) {
-    const hasPub = await prisma.restaurantPublishedTag.findUnique({
-      where: {
-        restaurantId_tagId: { restaurantId: restaurant.id, tagId: indianTag.id },
-      },
-    });
-    if (!hasPub) {
-      await prisma.restaurantPublishedTag.create({
-        data: { restaurantId: restaurant.id, tagId: indianTag.id },
-      });
-    }
-  }
+  await setRestaurantSeedTag(restaurant.id, 'indian');
 
   const categoryCount = await prisma.menuCategory.count({
     where: { restaurantId: restaurant.id },
@@ -410,6 +419,22 @@ async function main() {
     },
   ];
 
+  /** Unique tag per Fremont-area seed restaurant (owner email → tag slug). */
+  const SEED_TAG_BY_OWNER_EMAIL: Record<string, string> = {
+    'owner2@halalmap.com': 'pakistani',
+    'owner3@halalmap.com': 'middle-eastern',
+    'owner4@halalmap.com': 'fast-food',
+    'owner5@halalmap.com': 'family-friendly',
+    'owner6@halalmap.com': 'lebanese',
+    'owner7@halalmap.com': 'turkish',
+    'owner8@halalmap.com': 'afghan',
+    'owner9@halalmap.com': 'bangladeshi',
+    'owner10@halalmap.com': 'somali',
+    'owner11@halalmap.com': 'persian',
+    'owner12@halalmap.com': 'fusion',
+    'owner13@halalmap.com': 'indonesian',
+  };
+
   for (const r of FREMONT_RESTAURANTS) {
     const { ownerEmail, ...rest } = r;
     const owner = await prisma.user.upsert({
@@ -470,6 +495,11 @@ async function main() {
           },
         });
       }
+    }
+
+    const tagSlug = SEED_TAG_BY_OWNER_EMAIL[ownerEmail];
+    if (tagSlug) {
+      await setRestaurantSeedTag(restRecord.id, tagSlug);
     }
   }
 
