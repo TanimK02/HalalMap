@@ -74,7 +74,8 @@ export function resolveDraftTagsForResponse(
   return [];
 }
 
-export function mapJoinToTagsWithActive(rows: { tag: TagWithActive }[]): TagWithActive[] {
+export function mapJoinToTagsWithActive(rows: { tag: TagWithActive }[] | null | undefined): TagWithActive[] {
+  if (!rows?.length) return [];
   return [...rows]
     .map((r) => ({
       id: r.tag.id,

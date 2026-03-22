@@ -90,16 +90,12 @@ export default function Profile() {
   }, []);
 
   useEffect(() => {
-    if (!restaurant) return;
-    setSelectedTagIds((restaurant.draftTags ?? restaurant.publishedTags ?? []).map((t) => t.id));
-  }, [restaurant]);
-
-  useEffect(() => {
     api
       .get<Restaurant>('/restaurants/me/restaurant')
       .then((r) => {
         const r2 = r.data;
         setRestaurant(r2);
+        setSelectedTagIds((r2.draftTags ?? r2.publishedTags ?? []).map((t) => t.id));
         setForm({
           name: r2.name,
           description: r2.description ?? '',

@@ -147,47 +147,6 @@ restaurantsRouter.get(
   }
 );
 
-// Public: get single restaurant with menu and effective fee structure
-restaurantsRouter.get('/:id', param('id').isString(), async (req: Request, res: Response) => {
-  const restaurant = await prisma.restaurant.findFirst({
-    where: { id: req.params.id as string, approved: true },
-    include: {
-      menuCategories: {
-        orderBy: { sortOrder: 'asc' },
-        include: {
-          items: {
-            where: { isAvailable: true },
-            orderBy: { sortOrder: 'asc' },
-          },
-        },
-      },
-      publishedTags: {
-        where: { tag: { active: true } },
-        select: { tag: { select: tagPublicSelect } },
-      },
-    },
-  });
-  if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
-  const { publishedTags, ...restaurantRest } = restaurant;
-  const pickupFee = getEffectiveFeeStructure(restaurant, 'PICKUP');
-  const deliveryFee = getEffectiveFeeStructure(restaurant, 'DELIVERY');
-  const response = {
-    ...restaurantRest,
-    tags: mapPublishedToPublicTags(
-      (publishedTags as { tag: { id: string; slug: string; label: string; sortOrder: number; active: boolean } }[]).map(
-        (pt) => ({ tag: { ...pt.tag, active: true } })
-      )
-    ),
-    pickupFee,
-    deliveryFee,
-  };
-  if (!isDeliveryEnabled()) {
-    response.offersDelivery = false;
-    response.deliveryFee = { type: 'flat' as const, valueCents: 0 };
-  }
-  return res.json(response);
-});
-
 // Owner: get my restaurant
 restaurantsRouter.get(
   '/me/restaurant',
@@ -741,3 +700,44 @@ restaurantsRouter.delete(
     return res.status(204).send();
   }
 );
+
+// Public: single restaurant by id (registered after /me/* so paths like /me are not captured as :id)
+restaurantsRouter.get('/:id', param('id').isString(), async (req: Request, res: Response) => {
+  const restaurant = await prisma.restaurant.findFirst({
+    where: { id: req.params.id as string, approved: true },
+    include: {
+      menuCategories: {
+        orderBy: { sortOrder: 'asc' },
+        include: {
+          items: {
+            where: { isAvailable: true },
+            orderBy: { sortOrder: 'asc' },
+          },
+        },
+      },
+      publishedTags: {
+        where: { tag: { active: true } },
+        select: { tag: { select: tagPublicSelect } },
+      },
+    },
+  });
+  if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+  const { publishedTags, ...restaurantRest } = restaurant;
+  const pickupFee = getEffectiveFeeStructure(restaurant, 'PICKUP');
+  const deliveryFee = getEffectiveFeeStructure(restaurant, 'DELIVERY');
+  const response = {
+    ...restaurantRest,
+    tags: mapPublishedToPublicTags(
+      (publishedTags as { tag: { id: string; slug: string; label: string; sortOrder: number; active: boolean } }[]).map(
+        (pt) => ({ tag: { ...pt.tag, active: true } })
+      )
+    ),
+    pickupFee,
+    deliveryFee,
+  };
+  if (!isDeliveryEnabled()) {
+    response.offersDelivery = false;
+    response.deliveryFee = { type: 'flat' as const, valueCents: 0 };
+  }
+  return res.json(response);
+});

@@ -167,6 +167,7 @@ export default function Moderation() {
         onClose={() => setDetailId(null)}
         showApproveButtons
         onApproved={onApproved}
+        onRestaurantTagsChanged={load}
       />
     </div>
   );

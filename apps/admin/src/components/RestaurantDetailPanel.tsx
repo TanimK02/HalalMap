@@ -65,6 +65,8 @@ type Props = {
   showApproveButtons?: boolean;
   onApproved?: (id: string, approved: boolean) => void;
   onDetailUpdated?: (detail: RestaurantDetail) => void;
+  /** Called after admin approve / decline / override of restaurant tags (not on initial panel load). */
+  onRestaurantTagsChanged?: () => void;
 };
 
 export default function RestaurantDetailPanel({
@@ -73,6 +75,7 @@ export default function RestaurantDetailPanel({
   showApproveButtons = false,
   onApproved,
   onDetailUpdated,
+  onRestaurantTagsChanged,
 }: Props) {
   const { enableDelivery } = useConfig();
   const [detail, setDetail] = useState<RestaurantDetail | null>(null);
@@ -144,20 +147,16 @@ export default function RestaurantDetailPanel({
     }
   }
 
-  async function refreshDetailFromApi(id: string) {
-    const { data } = await api.get<RestaurantDetail>(`/admin/restaurants/${id}`);
-    setDetail(data);
-    setPublishedEditorIds((data.publishedTags ?? []).filter((t) => t.active).map((t) => t.id));
-    onDetailUpdated?.(data);
-  }
-
   async function handleApproveTags() {
     if (!detail) return;
     setTagBusy(true);
     setTagActionMessage('');
     try {
-      await api.post(`/admin/restaurants/${detail.id}/tags/approve`);
-      await refreshDetailFromApi(detail.id);
+      const { data } = await api.post<RestaurantDetail>(`/admin/restaurants/${detail.id}/tags/approve`);
+      setDetail(data);
+      setPublishedEditorIds((data.publishedTags ?? []).filter((t) => t.active).map((t) => t.id));
+      onDetailUpdated?.(data);
+      onRestaurantTagsChanged?.();
       setTagActionMessage('Tags approved.');
     } catch (err) {
       setTagActionMessage(
@@ -173,8 +172,11 @@ export default function RestaurantDetailPanel({
     setTagBusy(true);
     setTagActionMessage('');
     try {
-      await api.post(`/admin/restaurants/${detail.id}/tags/decline`);
-      await refreshDetailFromApi(detail.id);
+      const { data } = await api.post<RestaurantDetail>(`/admin/restaurants/${detail.id}/tags/decline`);
+      setDetail(data);
+      setPublishedEditorIds((data.publishedTags ?? []).filter((t) => t.active).map((t) => t.id));
+      onDetailUpdated?.(data);
+      onRestaurantTagsChanged?.();
       setTagActionMessage('Tag proposal declined.');
     } catch (err) {
       setTagActionMessage(
@@ -190,8 +192,13 @@ export default function RestaurantDetailPanel({
     setTagBusy(true);
     setTagActionMessage('');
     try {
-      await api.patch(`/admin/restaurants/${detail.id}/tags`, { tagIds: publishedEditorIds });
-      await refreshDetailFromApi(detail.id);
+      const { data } = await api.patch<RestaurantDetail>(`/admin/restaurants/${detail.id}/tags`, {
+        tagIds: publishedEditorIds,
+      });
+      setDetail(data);
+      setPublishedEditorIds((data.publishedTags ?? []).filter((t) => t.active).map((t) => t.id));
+      onDetailUpdated?.(data);
+      onRestaurantTagsChanged?.();
       setTagActionMessage('Published tags updated.');
     } catch (err) {
       setTagActionMessage(

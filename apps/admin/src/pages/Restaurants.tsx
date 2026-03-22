@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import RestaurantDetailPanel, { getCertificateStatus, HALAL_STATUS_LABELS } from '../components/RestaurantDetailPanel';
@@ -29,14 +29,25 @@ export default function Restaurants() {
   const [halalFilter, setHalalFilter] = useState('');
   const [tagReviewOnly, setTagReviewOnly] = useState(false);
 
+  const fetchRestaurants = useCallback(
+    (options?: { showLoading?: boolean }) => {
+      const showLoading = options?.showLoading !== false;
+      if (showLoading) setLoading(true);
+      const params = tagReviewOnly ? { pendingTags: 'true' } : {};
+      return api
+        .get<Restaurant[]>('/admin/restaurants', { params })
+        .then((r) => setRestaurants(r.data))
+        .catch(() => setRestaurants([]))
+        .finally(() => {
+          if (showLoading) setLoading(false);
+        });
+    },
+    [tagReviewOnly]
+  );
+
   useEffect(() => {
-    setLoading(true);
-    api
-      .get<Restaurant[]>('/admin/restaurants')
-      .then((r) => setRestaurants(r.data))
-      .catch(() => setRestaurants([]))
-      .finally(() => setLoading(false));
-  }, []);
+    void fetchRestaurants({ showLoading: true });
+  }, [fetchRestaurants]);
 
   useEffect(() => {
     setDetailId(detailFromUrl || null);
@@ -74,11 +85,8 @@ export default function Restaurants() {
     if (halalFilter) {
       list = list.filter((r) => (r.halalStatuses ?? []).includes(halalFilter));
     }
-    if (tagReviewOnly) {
-      list = list.filter((r) => r.hasPendingTagChanges === true);
-    }
     return list;
-  }, [restaurants, approvalFilter, search, halalFilter, tagReviewOnly]);
+  }, [restaurants, approvalFilter, search, halalFilter]);
 
   if (loading) return <div className="text-text-secondary">Loading...</div>;
 
@@ -213,7 +221,11 @@ export default function Restaurants() {
         </table>
       </div>
 
-      <RestaurantDetailPanel restaurantId={detailId} onClose={closeDetail} />
+      <RestaurantDetailPanel
+        restaurantId={detailId}
+        onClose={closeDetail}
+        onRestaurantTagsChanged={() => void fetchRestaurants({ showLoading: false })}
+      />
     </div>
   );
 }
