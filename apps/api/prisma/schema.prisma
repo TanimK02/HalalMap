@@ -107,9 +107,44 @@ model Restaurant {
   stripeConnectRequirements Json?
   stripeConnectLastSyncedAt DateTime?
 
+  hasPendingTagChanges Boolean @default(false)
+
   menuCategories MenuCategory[]
   orders        Order[]
   favoredBy     UserFavoriteRestaurant[]
+  publishedTags RestaurantPublishedTag[]
+  tagDrafts     RestaurantTagDraft[]
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  label     String
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  publishedFor RestaurantPublishedTag[]
+  draftFor     RestaurantTagDraft[]
+}
+
+model RestaurantPublishedTag {
+  restaurantId String
+  tagId        String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  tag          Tag        @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([restaurantId, tagId])
+}
+
+model RestaurantTagDraft {
+  restaurantId String
+  tagId        String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  tag          Tag        @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([restaurantId, tagId])
 }
 
 model UserFavoriteRestaurant {

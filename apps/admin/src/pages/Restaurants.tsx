@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import RestaurantDetailPanel, { getCertificateStatus, HALAL_STATUS_LABELS } from '../components/RestaurantDetailPanel';
@@ -12,6 +12,7 @@ type Restaurant = {
   certificateUrl: string | null;
   certificateExpiresAt: string | null;
   approved: boolean;
+  hasPendingTagChanges?: boolean;
   owner: { id: string; name: string; email: string };
   createdAt: string;
 };
@@ -26,15 +27,27 @@ export default function Restaurants() {
   const [search, setSearch] = useState('');
   const [approvalFilter, setApprovalFilter] = useState<'all' | 'approved' | 'pending'>('all');
   const [halalFilter, setHalalFilter] = useState('');
+  const [tagReviewOnly, setTagReviewOnly] = useState(false);
+
+  const fetchRestaurants = useCallback(
+    (options?: { showLoading?: boolean }) => {
+      const showLoading = options?.showLoading !== false;
+      if (showLoading) setLoading(true);
+      const params = tagReviewOnly ? { pendingTags: 'true' } : {};
+      return api
+        .get<Restaurant[]>('/admin/restaurants', { params })
+        .then((r) => setRestaurants(r.data))
+        .catch(() => setRestaurants([]))
+        .finally(() => {
+          if (showLoading) setLoading(false);
+        });
+    },
+    [tagReviewOnly]
+  );
 
   useEffect(() => {
-    setLoading(true);
-    api
-      .get<Restaurant[]>('/admin/restaurants')
-      .then((r) => setRestaurants(r.data))
-      .catch(() => setRestaurants([]))
-      .finally(() => setLoading(false));
-  }, []);
+    void fetchRestaurants({ showLoading: true });
+  }, [fetchRestaurants]);
 
   useEffect(() => {
     setDetailId(detailFromUrl || null);
@@ -115,6 +128,15 @@ export default function Restaurants() {
             ))}
           </select>
         </div>
+        <label className="flex items-center gap-2 text-sm text-text-secondary">
+          <input
+            type="checkbox"
+            checked={tagReviewOnly}
+            onChange={(e) => setTagReviewOnly(e.target.checked)}
+            className="rounded border-gray-300"
+          />
+          Tag review pending
+        </label>
       </div>
       <div className="overflow-x-auto rounded border border-gray-200 bg-surface">
         <table className="min-w-full divide-y divide-gray-200">
@@ -150,13 +172,20 @@ export default function Restaurants() {
                     </td>
                     <td className="px-4 py-2 text-sm text-text-secondary">{r.owner?.email ?? '—'}</td>
                     <td className="px-4 py-2">
-                      <span
-                        className={`inline-block rounded px-2 py-0.5 text-sm ${
-                          r.approved ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {r.approved ? 'Approved' : 'Pending'}
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span
+                          className={`inline-block w-fit rounded px-2 py-0.5 text-sm ${
+                            r.approved ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {r.approved ? 'Approved' : 'Pending'}
+                        </span>
+                        {r.hasPendingTagChanges === true && (
+                          <span className="w-fit rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-900">
+                            Tags pending
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-2">
                       {certStatus.status !== 'none' ? (
@@ -192,7 +221,11 @@ export default function Restaurants() {
         </table>
       </div>
 
-      <RestaurantDetailPanel restaurantId={detailId} onClose={closeDetail} />
+      <RestaurantDetailPanel
+        restaurantId={detailId}
+        onClose={closeDetail}
+        onRestaurantTagsChanged={() => void fetchRestaurants({ showLoading: false })}
+      />
     </div>
   );
 }

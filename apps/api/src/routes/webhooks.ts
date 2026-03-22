@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { prisma } from '../lib/prisma.js';
 import { isDeliveryEnabled, isStripeConnectEnabled } from '../lib/config.js';
 import { Decimal } from '@prisma/client/runtime/library';
+import { Prisma } from '@prisma/client';
 
 const stripe =
   process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET
@@ -160,7 +161,10 @@ webhooksRouter.post('/stripe', async (req: Request, res: Response) => {
       where: { id: restaurantId, stripeConnectAccountId: account.id },
       data: {
         stripeConnectStatus: status,
-        stripeConnectRequirements: account.requirements ?? null,
+        stripeConnectRequirements:
+          account.requirements == null
+            ? Prisma.JsonNull
+            : (JSON.parse(JSON.stringify(account.requirements)) as Prisma.InputJsonValue),
         stripeConnectLastSyncedAt: new Date(),
       },
     });

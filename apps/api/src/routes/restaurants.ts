@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { body, param, query, validationResult } from 'express-validator';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { getEffectiveFeeStructure } from '../lib/fees.js';
 import { isDeliveryEnabled, isStripeConnectEnabled } from '../lib/config.js';
@@ -8,6 +9,13 @@ import { geocode, haversineMiles } from '../lib/geocode.js';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth.js';
 import { isS3Configured, getPresignedUploadUrl } from '../lib/s3.js';
 import type { HalalStatus } from '@halal-map/shared';
+import {
+  getPublishedTagIds,
+  mapPublishedToPublicTags,
+  resolveDraftTagsForResponse,
+  setsEqualString,
+  tagPublicSelect,
+} from '../lib/restaurantTags.js';
 
 const HALAL_STATUS_VALUES: HalalStatus[] = [
   'CERTIFIED_HALAL', 'MUSLIM_OWNED', 'HALAL_FRIENDLY', 'PROCLAIMED_HALAL', 'SOME_HALAL',
@@ -26,6 +34,7 @@ restaurantsRouter.get(
   [
     query('halalStatuses').optional().trim(),
     query('search').optional().trim(),
+    query('tags').optional().trim(),
     query('lat').optional(),
     query('lng').optional(),
   ],
@@ -33,6 +42,7 @@ restaurantsRouter.get(
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
     const halalStatusesParam = (req.query.halalStatuses as string)?.split(',').map((s) => s.trim()).filter(Boolean) ?? [];
+    const tagsParam = (req.query.tags as string)?.split(',').map((s) => s.trim()).filter(Boolean) ?? [];
     const search = req.query.search as string | undefined;
     const latParam = req.query.lat as string | undefined;
     const lngParam = req.query.lng as string | undefined;
@@ -47,28 +57,43 @@ restaurantsRouter.get(
       }
     }
 
-    const where: {
-      approved: boolean;
-      latitude?: { not: null };
-      longitude?: { not: null };
-      halalStatuses?: { hasEvery: HalalStatus[] };
-      OR?: { name?: { contains: string; mode: 'insensitive' }; description?: { contains: string; mode: 'insensitive' } }[];
-    } = {
-      approved: true,
-    };
+    let filterTagIds: string[] = [];
+    const uniqueTagTokens = [...new Set(tagsParam)];
+    if (uniqueTagTokens.length > 0) {
+      const resolvedIds: string[] = [];
+      for (const token of uniqueTagTokens) {
+        const t = await prisma.tag.findFirst({
+          where: { active: true, OR: [{ id: token }, { slug: token }] },
+          select: { id: true },
+        });
+        if (!t) {
+          return res.status(400).json({ errors: [{ msg: `Invalid or inactive tag: ${token}` }] });
+        }
+        resolvedIds.push(t.id);
+      }
+      filterTagIds = [...new Set(resolvedIds)];
+    }
+
+    const whereParts: Prisma.RestaurantWhereInput[] = [{ approved: true }];
     if (halalStatusesParam.length > 0) {
-      where.halalStatuses = { hasEvery: halalStatusesParam as HalalStatus[] };
+      whereParts.push({ halalStatuses: { hasEvery: halalStatusesParam as HalalStatus[] } });
     }
     if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-      ];
+      whereParts.push({
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+        ],
+      });
     }
     if (useLocation) {
-      where.latitude = { not: null };
-      where.longitude = { not: null };
+      whereParts.push({ latitude: { not: null }, longitude: { not: null } });
     }
+    for (const tid of filterTagIds) {
+      whereParts.push({ publishedTags: { some: { tagId: tid } } });
+    }
+    const where: Prisma.RestaurantWhereInput =
+      whereParts.length === 1 ? whereParts[0]! : { AND: whereParts };
 
     const select = {
       id: true,
@@ -81,6 +106,10 @@ restaurantsRouter.get(
       offersPickup: true,
       offersDelivery: true,
       businessHours: true,
+      publishedTags: {
+        where: { tag: { active: true } },
+        select: { tag: { select: tagPublicSelect } },
+      },
       ...(useLocation ? { latitude: true, longitude: true } : {}),
     };
 
@@ -90,52 +119,33 @@ restaurantsRouter.get(
       orderBy: useLocation ? undefined : { name: 'asc' },
     });
 
-    if (useLocation && restaurants.length > 0) {
-      const withDistance = (restaurants as (typeof restaurants[0] & { latitude: number; longitude: number })[]).map(
-        (r) => {
-          const distanceMiles = Math.round(haversineMiles(lat, lng, r.latitude, r.longitude) * 100) / 100;
-          const { latitude: _lat, longitude: _lng, ...rest } = r;
-          return { ...rest, distanceMiles };
-        }
-      );
+    const withTags = restaurants.map((r) => {
+      const { publishedTags, ...rest } = r;
+      return {
+        ...rest,
+        tags: mapPublishedToPublicTags(
+          (publishedTags as { tag: { id: string; slug: string; label: string; sortOrder: number; active: boolean } }[]).map(
+            (pt) => ({ tag: { ...pt.tag, active: true } })
+          )
+        ),
+      };
+    });
+
+    if (useLocation && withTags.length > 0) {
+      const withDistance = (
+        withTags as (typeof withTags[0] & { latitude: number; longitude: number })[]
+      ).map((r) => {
+        const distanceMiles = Math.round(haversineMiles(lat, lng, r.latitude, r.longitude) * 100) / 100;
+        const { latitude: _lat, longitude: _lng, ...rest } = r;
+        return { ...rest, distanceMiles };
+      });
       withDistance.sort((a, b) => a.distanceMiles - b.distanceMiles);
       return res.json(withDistance);
     }
 
-    return res.json(restaurants);
+    return res.json(withTags);
   }
 );
-
-// Public: get single restaurant with menu and effective fee structure
-restaurantsRouter.get('/:id', param('id').isString(), async (req: Request, res: Response) => {
-  const restaurant = await prisma.restaurant.findFirst({
-    where: { id: req.params.id as string, approved: true },
-    include: {
-      menuCategories: {
-        orderBy: { sortOrder: 'asc' },
-        include: {
-          items: {
-            where: { isAvailable: true },
-            orderBy: { sortOrder: 'asc' },
-          },
-        },
-      },
-    },
-  });
-  if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
-  const pickupFee = getEffectiveFeeStructure(restaurant, 'PICKUP');
-  const deliveryFee = getEffectiveFeeStructure(restaurant, 'DELIVERY');
-  const response = {
-    ...restaurant,
-    pickupFee,
-    deliveryFee,
-  };
-  if (!isDeliveryEnabled()) {
-    response.offersDelivery = false;
-    response.deliveryFee = { type: 'flat' as const, valueCents: 0 };
-  }
-  return res.json(response);
-});
 
 // Owner: get my restaurant
 restaurantsRouter.get(
@@ -150,10 +160,36 @@ restaurantsRouter.get(
           orderBy: { sortOrder: 'asc' },
           include: { items: { orderBy: { sortOrder: 'asc' } } },
         },
+        publishedTags: {
+          include: {
+            tag: { select: { ...tagPublicSelect, active: true } },
+          },
+        },
+        tagDrafts: {
+          include: {
+            tag: { select: { ...tagPublicSelect, active: true } },
+          },
+        },
       },
     });
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
-    return res.json(restaurant);
+    const { publishedTags: pubRows, tagDrafts: draftRows, ...rest } = restaurant;
+    const publishedTags = mapPublishedToPublicTags(
+      pubRows.map((p) => ({ tag: p.tag as { id: string; slug: string; label: string; sortOrder: number; active: boolean } }))
+    );
+    const draftTags = resolveDraftTagsForResponse(
+      restaurant.hasPendingTagChanges,
+      publishedTags,
+      draftRows.map((d) => ({
+        tag: d.tag as { id: string; slug: string; label: string; sortOrder: number; active: boolean },
+      }))
+    );
+    return res.json({
+      ...rest,
+      publishedTags,
+      draftTags,
+      hasPendingTagChanges: restaurant.hasPendingTagChanges,
+    });
   }
 );
 
@@ -379,6 +415,102 @@ restaurantsRouter.patch(
   }
 );
 
+// Owner: propose restaurant tags (draft; live tags unchanged until admin approves)
+restaurantsRouter.put(
+  '/me/restaurant/tags',
+  requireAuth,
+  requireRole('RESTAURANT_OWNER'),
+  [
+    body('tagIds').isArray().withMessage('tagIds must be an array'),
+    body('tagIds.*').isString().notEmpty(),
+  ],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const rawIds = req.body.tagIds as string[];
+    const tagIds = [...new Set(rawIds)];
+
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { ownerId: req.userId! },
+      select: { id: true },
+    });
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+
+    if (tagIds.length > 0) {
+      const tags = await prisma.tag.findMany({
+        where: { id: { in: tagIds }, active: true },
+        select: { id: true },
+      });
+      if (tags.length !== tagIds.length) {
+        return res.status(400).json({ error: 'One or more tags are invalid or inactive' });
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const published = await getPublishedTagIds(tx, restaurant.id);
+      const proposed = new Set(tagIds);
+      await tx.restaurantTagDraft.deleteMany({ where: { restaurantId: restaurant.id } });
+      if (setsEqualString(published, proposed)) {
+        await tx.restaurant.update({
+          where: { id: restaurant.id },
+          data: { hasPendingTagChanges: false },
+        });
+        return;
+      }
+      if (proposed.size > 0) {
+        await tx.restaurantTagDraft.createMany({
+          data: [...proposed].map((tagId) => ({ restaurantId: restaurant.id, tagId })),
+        });
+      }
+      await tx.restaurant.update({
+        where: { id: restaurant.id },
+        data: { hasPendingTagChanges: true },
+      });
+    });
+
+    const full = await prisma.restaurant.findUnique({
+      where: { id: restaurant.id },
+      include: {
+        menuCategories: {
+          orderBy: { sortOrder: 'asc' },
+          include: { items: { orderBy: { sortOrder: 'asc' } } },
+        },
+        publishedTags: {
+          include: {
+            tag: { select: { ...tagPublicSelect, active: true } },
+          },
+        },
+        tagDrafts: {
+          include: {
+            tag: { select: { ...tagPublicSelect, active: true } },
+          },
+        },
+      },
+    });
+    if (!full) return res.status(404).json({ error: 'Restaurant not found' });
+    const { publishedTags: pubRows, tagDrafts: draftRows, ...rest } = full;
+    const publishedTags = mapPublishedToPublicTags(
+      pubRows.map((p) => ({
+        tag: p.tag as { id: string; slug: string; label: string; sortOrder: number; active: boolean },
+      }))
+    );
+    const draftTags = resolveDraftTagsForResponse(
+      full.hasPendingTagChanges,
+      publishedTags,
+      draftRows.map((d) => ({
+        tag: d.tag as { id: string; slug: string; label: string; sortOrder: number; active: boolean },
+      }))
+    );
+    return res.json({
+      ...rest,
+      publishedTags,
+      draftTags,
+      hasPendingTagChanges: full.hasPendingTagChanges,
+    });
+  }
+);
+
 // Owner: menu categories CRUD
 restaurantsRouter.get(
   '/me/restaurant/categories',
@@ -568,3 +700,44 @@ restaurantsRouter.delete(
     return res.status(204).send();
   }
 );
+
+// Public: single restaurant by id (registered after /me/* so paths like /me are not captured as :id)
+restaurantsRouter.get('/:id', param('id').isString(), async (req: Request, res: Response) => {
+  const restaurant = await prisma.restaurant.findFirst({
+    where: { id: req.params.id as string, approved: true },
+    include: {
+      menuCategories: {
+        orderBy: { sortOrder: 'asc' },
+        include: {
+          items: {
+            where: { isAvailable: true },
+            orderBy: { sortOrder: 'asc' },
+          },
+        },
+      },
+      publishedTags: {
+        where: { tag: { active: true } },
+        select: { tag: { select: tagPublicSelect } },
+      },
+    },
+  });
+  if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+  const { publishedTags, ...restaurantRest } = restaurant;
+  const pickupFee = getEffectiveFeeStructure(restaurant, 'PICKUP');
+  const deliveryFee = getEffectiveFeeStructure(restaurant, 'DELIVERY');
+  const response = {
+    ...restaurantRest,
+    tags: mapPublishedToPublicTags(
+      (publishedTags as { tag: { id: string; slug: string; label: string; sortOrder: number; active: boolean } }[]).map(
+        (pt) => ({ tag: { ...pt.tag, active: true } })
+      )
+    ),
+    pickupFee,
+    deliveryFee,
+  };
+  if (!isDeliveryEnabled()) {
+    response.offersDelivery = false;
+    response.deliveryFee = { type: 'flat' as const, valueCents: 0 };
+  }
+  return res.json(response);
+});

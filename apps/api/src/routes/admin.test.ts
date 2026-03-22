@@ -3,11 +3,26 @@ import { app } from '../app.js';
 
 jest.mock('../lib/prisma.js', () => ({
   prisma: {
+    $transaction: jest.fn(),
     restaurant: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
       count: jest.fn(),
+    },
+    tag: {
+      findMany: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
+    restaurantTagDraft: {
+      deleteMany: jest.fn(),
+      findMany: jest.fn(),
+    },
+    restaurantPublishedTag: {
+      deleteMany: jest.fn(),
+      createMany: jest.fn(),
+      findMany: jest.fn(),
     },
     user: {
       findMany: jest.fn(),
@@ -40,6 +55,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  prisma.$transaction.mockImplementation((fn: (tx: typeof prisma) => Promise<unknown>) => fn(prisma));
   (jwt.verify as jest.Mock).mockImplementation((token: string) => {
     if (token === adminToken) {
       return { userId: 'admin-1', email: 'admin@example.com', role: 'ADMIN' };
@@ -93,14 +109,89 @@ describe('GET /admin/restaurants/:id', () => {
     (prisma.restaurant.findUnique as jest.Mock).mockResolvedValue({
       id: 'r1',
       name: 'R1',
+      hasPendingTagChanges: false,
       owner: { id: 'o1', name: 'O', email: 'o@x.com' },
       menuCategories: [],
+      publishedTags: [],
+      tagDrafts: [],
     });
 
     const res = await request(app).get('/admin/restaurants/r1').set(auth());
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ id: 'r1', name: 'R1' });
+    expect(res.body.publishedTags).toEqual([]);
+    expect(res.body.draftTags).toEqual([]);
+  });
+});
+
+describe('GET /admin/tags', () => {
+  it('returns 200 with tags', async () => {
+    (prisma.tag.findMany as jest.Mock).mockResolvedValue([
+      { id: 't1', slug: 'a', label: 'A', sortOrder: 0, active: true, createdAt: new Date(), updatedAt: new Date() },
+    ]);
+
+    const res = await request(app).get('/admin/tags').set(auth());
+
+    expect(res.status).toBe(200);
+    expect(res.body[0]).toMatchObject({ id: 't1', slug: 'a', label: 'A' });
+  });
+});
+
+describe('POST /admin/restaurants/:id/tags/approve', () => {
+  it('returns 400 when no pending tag changes', async () => {
+    (prisma.restaurant.findUnique as jest.Mock).mockResolvedValue({
+      id: 'r1',
+      hasPendingTagChanges: false,
+    });
+
+    const res = await request(app).post('/admin/restaurants/r1/tags/approve').set(auth());
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('No pending tag changes');
+  });
+
+  it('returns 200 after approving draft tags', async () => {
+    (prisma.restaurant.findUnique as jest.Mock)
+      .mockResolvedValueOnce({
+        id: 'r1',
+        hasPendingTagChanges: true,
+      })
+      .mockResolvedValueOnce({
+        id: 'r1',
+        name: 'R1',
+        hasPendingTagChanges: false,
+        owner: { id: 'o1', name: 'O', email: 'o@x.com' },
+        menuCategories: [],
+        publishedTags: [
+          { tag: { id: 't1', slug: 'a', label: 'A', sortOrder: 0, active: true } },
+        ],
+        tagDrafts: [],
+      });
+    (prisma.restaurantTagDraft.findMany as jest.Mock).mockResolvedValue([{ tagId: 't1' }]);
+    (prisma.restaurantPublishedTag.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
+    (prisma.restaurantPublishedTag.createMany as jest.Mock).mockResolvedValue({ count: 1 });
+    (prisma.restaurantTagDraft.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
+    (prisma.restaurant.update as jest.Mock).mockResolvedValue({});
+
+    const res = await request(app).post('/admin/restaurants/r1/tags/approve').set(auth());
+
+    expect(res.status).toBe(200);
+    expect(res.body.hasPendingTagChanges).toBe(false);
+  });
+});
+
+describe('PATCH /admin/restaurants/:id/tags', () => {
+  it('returns 400 when tag id invalid', async () => {
+    (prisma.restaurant.findUnique as jest.Mock).mockResolvedValue({ id: 'r1' });
+    (prisma.tag.findMany as jest.Mock).mockResolvedValue([]);
+
+    const res = await request(app)
+      .patch('/admin/restaurants/r1/tags')
+      .set(auth())
+      .send({ tagIds: ['bad'] });
+
+    expect(res.status).toBe(400);
   });
 });
 

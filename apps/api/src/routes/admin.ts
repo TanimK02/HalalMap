@@ -4,6 +4,12 @@ import Stripe from 'stripe';
 import bcrypt from 'bcrypt';
 import { prisma } from '../lib/prisma.js';
 import { geocode } from '../lib/geocode.js';
+import {
+  mapJoinToTagsWithActive,
+  resolveDraftTagsAdmin,
+  tagPublicSelect,
+  type TagWithActive,
+} from '../lib/restaurantTags.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import type { HalalStatus } from '@halal-map/shared';
 
@@ -27,13 +33,21 @@ adminRouter.use(requireRole('ADMIN'));
 // List restaurants (pending first)
 adminRouter.get(
   '/restaurants',
-  [query('approved').optional().isIn(['true', 'false']), query('pending').optional().isIn(['true'])],
+  [
+    query('approved').optional().isIn(['true', 'false']),
+    query('pending').optional().isIn(['true']),
+    query('pendingTags').optional().isIn(['true']),
+  ],
   async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
     const approved = req.query.approved;
     const pending = req.query.pending === 'true';
-    const where: { approved?: boolean } = {};
+    const pendingTags = req.query.pendingTags === 'true';
+    const where: { approved?: boolean; hasPendingTagChanges?: boolean } = {};
     if (approved !== undefined) where.approved = approved === 'true';
     if (pending) where.approved = false;
+    if (pendingTags) where.hasPendingTagChanges = true;
 
     const restaurants = await prisma.restaurant.findMany({
       where,
@@ -133,11 +147,284 @@ adminRouter.get('/restaurants/:id', param('id').isString(), async (req: Request,
     include: {
       owner: { select: { id: true, name: true, email: true } },
       menuCategories: { include: { items: true } },
+      publishedTags: {
+        include: { tag: { select: { ...tagPublicSelect, active: true } } },
+      },
+      tagDrafts: {
+        include: { tag: { select: { ...tagPublicSelect, active: true } } },
+      },
     },
   });
   if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
-  return res.json(restaurant);
+  const { publishedTags: pubRows, tagDrafts: draftRows, ...rest } = restaurant;
+  const publishedTags = mapJoinToTagsWithActive(pubRows.map((p) => ({ tag: p.tag as TagWithActive })));
+  const draftTags = resolveDraftTagsAdmin(
+    restaurant.hasPendingTagChanges,
+    publishedTags,
+    draftRows.map((d) => ({ tag: d.tag as TagWithActive }))
+  );
+  return res.json({
+    ...rest,
+    publishedTags,
+    draftTags,
+    hasPendingTagChanges: restaurant.hasPendingTagChanges,
+  });
 });
+
+adminRouter.get('/tags', async (_req: Request, res: Response) => {
+  const tags = await prisma.tag.findMany({
+    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+    select: { ...tagPublicSelect, active: true, createdAt: true, updatedAt: true },
+  });
+  return res.json(tags);
+});
+
+adminRouter.post(
+  '/tags',
+  [
+    body('slug')
+      .trim()
+      .matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+      .withMessage('slug must be lowercase kebab-case'),
+    body('label').trim().isLength({ min: 1 }),
+    body('sortOrder').optional().isInt(),
+  ],
+  async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    const { slug, label, sortOrder } = req.body as { slug: string; label: string; sortOrder?: number };
+    try {
+      const tag = await prisma.tag.create({
+        data: {
+          slug,
+          label,
+          sortOrder: sortOrder ?? 0,
+        },
+        select: { ...tagPublicSelect, active: true, createdAt: true, updatedAt: true },
+      });
+      return res.status(201).json(tag);
+    } catch {
+      return res.status(409).json({ error: 'Slug already exists' });
+    }
+  }
+);
+
+adminRouter.patch(
+  '/tags/:id',
+  param('id').isString(),
+  [
+    body('label').optional().trim().isLength({ min: 1 }),
+    body('sortOrder').optional().isInt(),
+    body('active').optional().isBoolean(),
+  ],
+  async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    const { label, sortOrder, active } = req.body as {
+      label?: string;
+      sortOrder?: number;
+      active?: boolean;
+    };
+    try {
+      const tag = await prisma.tag.update({
+        where: { id: req.params.id as string },
+        data: {
+          ...(label != null && { label }),
+          ...(sortOrder != null && { sortOrder }),
+          ...(active !== undefined && { active }),
+        },
+        select: { ...tagPublicSelect, active: true, createdAt: true, updatedAt: true },
+      });
+      return res.json(tag);
+    } catch {
+      return res.status(404).json({ error: 'Tag not found' });
+    }
+  }
+);
+
+adminRouter.delete('/tags/:id', param('id').isString(), async (req: Request, res: Response) => {
+  try {
+    const tag = await prisma.tag.update({
+      where: { id: req.params.id as string },
+      data: { active: false },
+      select: { ...tagPublicSelect, active: true, createdAt: true, updatedAt: true },
+    });
+    return res.json(tag);
+  } catch {
+    return res.status(404).json({ error: 'Tag not found' });
+  }
+});
+
+adminRouter.post('/restaurants/:id/tags/approve', param('id').isString(), async (req: Request, res: Response) => {
+  const restaurantId = req.params.id as string;
+  const pendingCheck = await prisma.restaurant.findUnique({
+    where: { id: restaurantId },
+    select: { id: true, hasPendingTagChanges: true },
+  });
+  if (!pendingCheck) return res.status(404).json({ error: 'Restaurant not found' });
+  if (!pendingCheck.hasPendingTagChanges) {
+    return res.status(400).json({ error: 'No pending tag changes' });
+  }
+  await prisma.$transaction(async (tx) => {
+    const drafts = await tx.restaurantTagDraft.findMany({ where: { restaurantId } });
+    const newTagIds = drafts.length > 0 ? drafts.map((d) => d.tagId) : [];
+    await tx.restaurantPublishedTag.deleteMany({ where: { restaurantId } });
+    if (newTagIds.length > 0) {
+      await tx.restaurantPublishedTag.createMany({
+        data: newTagIds.map((tagId) => ({ restaurantId, tagId })),
+      });
+    }
+    await tx.restaurantTagDraft.deleteMany({ where: { restaurantId } });
+    await tx.restaurant.update({
+      where: { id: restaurantId },
+      data: { hasPendingTagChanges: false },
+    });
+  });
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { id: restaurantId },
+    include: {
+      owner: { select: { id: true, name: true, email: true } },
+      menuCategories: { include: { items: true } },
+      publishedTags: {
+        include: { tag: { select: { ...tagPublicSelect, active: true } } },
+      },
+      tagDrafts: {
+        include: { tag: { select: { ...tagPublicSelect, active: true } } },
+      },
+    },
+  });
+  if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+  const { publishedTags: pubRows, tagDrafts: draftRows, ...rest } = restaurant;
+  const publishedTags = mapJoinToTagsWithActive(pubRows.map((p) => ({ tag: p.tag as TagWithActive })));
+  const draftTags = resolveDraftTagsAdmin(
+    restaurant.hasPendingTagChanges,
+    publishedTags,
+    draftRows.map((d) => ({ tag: d.tag as TagWithActive }))
+  );
+  return res.json({
+    ...rest,
+    publishedTags,
+    draftTags,
+    hasPendingTagChanges: restaurant.hasPendingTagChanges,
+  });
+});
+
+adminRouter.post('/restaurants/:id/tags/decline', param('id').isString(), async (req: Request, res: Response) => {
+  const restaurantId = req.params.id as string;
+  const existing = await prisma.restaurant.findUnique({
+    where: { id: restaurantId },
+    select: { id: true, hasPendingTagChanges: true },
+  });
+  if (!existing) return res.status(404).json({ error: 'Restaurant not found' });
+  if (!existing.hasPendingTagChanges) {
+    return res.status(400).json({ error: 'No pending tag changes' });
+  }
+  await prisma.$transaction([
+    prisma.restaurantTagDraft.deleteMany({ where: { restaurantId } }),
+    prisma.restaurant.update({
+      where: { id: restaurantId },
+      data: { hasPendingTagChanges: false },
+    }),
+  ]);
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { id: restaurantId },
+    include: {
+      owner: { select: { id: true, name: true, email: true } },
+      menuCategories: { include: { items: true } },
+      publishedTags: {
+        include: { tag: { select: { ...tagPublicSelect, active: true } } },
+      },
+      tagDrafts: {
+        include: { tag: { select: { ...tagPublicSelect, active: true } } },
+      },
+    },
+  });
+  if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+  const { publishedTags: pubRows, tagDrafts: draftRows, ...rest } = restaurant;
+  const publishedTags = mapJoinToTagsWithActive(pubRows.map((p) => ({ tag: p.tag as TagWithActive })));
+  const draftTags = resolveDraftTagsAdmin(
+    restaurant.hasPendingTagChanges,
+    publishedTags,
+    draftRows.map((d) => ({ tag: d.tag as TagWithActive }))
+  );
+  return res.json({
+    ...rest,
+    publishedTags,
+    draftTags,
+    hasPendingTagChanges: restaurant.hasPendingTagChanges,
+  });
+});
+
+adminRouter.patch(
+  '/restaurants/:id/tags',
+  param('id').isString(),
+  [
+    body('tagIds').isArray().withMessage('tagIds must be an array'),
+    body('tagIds.*').isString().notEmpty(),
+  ],
+  async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    const restaurantId = req.params.id as string;
+    const rawIds = req.body.tagIds as string[];
+    const tagIds = [...new Set(rawIds)];
+
+    const restaurant = await prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { id: true } });
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+
+    if (tagIds.length > 0) {
+      const tags = await prisma.tag.findMany({
+        where: { id: { in: tagIds }, active: true },
+        select: { id: true },
+      });
+      if (tags.length !== tagIds.length) {
+        return res.status(400).json({ error: 'One or more tags are invalid or inactive' });
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.restaurantPublishedTag.deleteMany({ where: { restaurantId } });
+      if (tagIds.length > 0) {
+        await tx.restaurantPublishedTag.createMany({
+          data: tagIds.map((tagId) => ({ restaurantId, tagId })),
+        });
+      }
+      await tx.restaurantTagDraft.deleteMany({ where: { restaurantId } });
+      await tx.restaurant.update({
+        where: { id: restaurantId },
+        data: { hasPendingTagChanges: false },
+      });
+    });
+
+    const updated = await prisma.restaurant.findUnique({
+      where: { id: restaurantId },
+      include: {
+        owner: { select: { id: true, name: true, email: true } },
+        menuCategories: { include: { items: true } },
+        publishedTags: {
+          include: { tag: { select: { ...tagPublicSelect, active: true } } },
+        },
+        tagDrafts: {
+          include: { tag: { select: { ...tagPublicSelect, active: true } } },
+        },
+      },
+    });
+    if (!updated) return res.status(404).json({ error: 'Restaurant not found' });
+    const { publishedTags: pubRows, tagDrafts: draftRows, ...rest } = updated;
+    const publishedTags = mapJoinToTagsWithActive(pubRows.map((p) => ({ tag: p.tag as TagWithActive })));
+    const draftTags = resolveDraftTagsAdmin(
+      updated.hasPendingTagChanges,
+      publishedTags,
+      draftRows.map((d) => ({ tag: d.tag as TagWithActive }))
+    );
+    return res.json({
+      ...rest,
+      publishedTags,
+      draftTags,
+      hasPendingTagChanges: updated.hasPendingTagChanges,
+    });
+  }
+);
 
 adminRouter.patch(
   '/restaurants/:id/approve',

@@ -27,6 +27,13 @@ api.interceptors.response.use(
 export type DayHours = { open?: string; close?: string };
 export type BusinessHoursMap = Record<string, DayHours>;
 
+export type RestaurantTag = {
+  id: string;
+  slug: string;
+  label: string;
+  sortOrder: number;
+};
+
 export type Restaurant = {
   id: string;
   name: string;
@@ -49,6 +56,9 @@ export type Restaurant = {
   stripeConnectRequirements?: Record<string, unknown> | null;
   stripeConnectLastSyncedAt?: string | null;
   menuCategories?: MenuCategory[];
+  publishedTags?: RestaurantTag[];
+  draftTags?: RestaurantTag[];
+  hasPendingTagChanges?: boolean;
 };
 
 export type FeeStructure =

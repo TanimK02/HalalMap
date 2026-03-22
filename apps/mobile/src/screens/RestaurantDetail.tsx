@@ -184,6 +184,11 @@ export default function RestaurantDetail() {
                 </View>
               );
             })}
+            {(data.tags ?? []).map((tag) => (
+              <View key={tag.id} style={[styles.badge, styles.tagBadge]}>
+                <Text style={[styles.badgeText, styles.tagBadgeText]}>{tag.label}</Text>
+              </View>
+            ))}
           </View>
         </View>
         {data.description ? (
@@ -329,6 +334,8 @@ const styles = StyleSheet.create({
   favoriteBtn: { padding: 4, marginLeft: 4 },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   badge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  tagBadge: { backgroundColor: '#E0E7FF' },
+  tagBadgeText: { color: '#3730A3' },
   badgeText: { fontSize: 13, fontWeight: '600' },
   desc: { fontSize: 14, color: brand.textSecondary, marginBottom: 6 },
   hoursBlock: { marginBottom: 12 },

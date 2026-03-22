@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import { api, type Restaurant, type BusinessHoursMap } from '../api';
+import { api, type Restaurant, type RestaurantTag, type BusinessHoursMap } from '../api';
 import { useConfig } from '../ConfigContext';
 import { HALAL_STATUS_LABELS } from '../constants';
 
@@ -78,6 +78,16 @@ export default function Profile() {
     deliveryFeeType: '' as '' | 'FLAT' | 'PERCENT',
     deliveryFeeValue: 0,
   });
+  const [tagCatalog, setTagCatalog] = useState<RestaurantTag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [tagSaving, setTagSaving] = useState(false);
+
+  useEffect(() => {
+    api
+      .get<RestaurantTag[]>('/tags')
+      .then((r) => setTagCatalog(r.data))
+      .catch(() => setTagCatalog([]));
+  }, []);
 
   useEffect(() => {
     api
@@ -85,6 +95,7 @@ export default function Profile() {
       .then((r) => {
         const r2 = r.data;
         setRestaurant(r2);
+        setSelectedTagIds((r2.draftTags ?? r2.publishedTags ?? []).map((t) => t.id));
         setForm({
           name: r2.name,
           description: r2.description ?? '',
@@ -142,10 +153,34 @@ export default function Profile() {
       setMessage('Saved.');
       const { data } = await api.get<Restaurant>('/restaurants/me/restaurant');
       setRestaurant(data);
+      setSelectedTagIds((data.draftTags ?? data.publishedTags ?? []).map((t) => t.id));
     } catch (err) {
       setMessage(axios.isAxiosError(err) && err.response?.data?.error ? err.response.data.error : 'Failed to save');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveTags() {
+    setTagSaving(true);
+    setMessage('');
+    try {
+      const { data } = await api.put<Restaurant>('/restaurants/me/restaurant/tags', {
+        tagIds: selectedTagIds,
+      });
+      setRestaurant(data);
+      setSelectedTagIds((data.draftTags ?? data.publishedTags ?? []).map((t) => t.id));
+      setMessage(
+        data.hasPendingTagChanges
+          ? 'Tags submitted. Waiting for admin approval before they appear to customers.'
+          : 'Tags are up to date.'
+      );
+    } catch (err) {
+      setMessage(
+        axios.isAxiosError(err) && err.response?.data?.error ? err.response.data.error : 'Failed to save tags'
+      );
+    } finally {
+      setTagSaving(false);
     }
   }
 
@@ -157,6 +192,12 @@ export default function Profile() {
       {restaurant && !restaurant.approved && (
         <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           Pending approval. Your restaurant will appear to customers after admin approval.
+        </div>
+      )}
+      {restaurant?.hasPendingTagChanges && (
+        <div className="rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          Tag changes are waiting for admin approval. Customers still see your current published tags until
+          then.
         </div>
       )}
       {stripeConnectEnabled && restaurant && (
@@ -286,6 +327,44 @@ export default function Profile() {
               </label>
             ))}
           </div>
+        </div>
+        <div className="rounded border border-gray-200 bg-surface p-4 space-y-3">
+          <div>
+            <h2 className="text-sm font-medium text-text-primary">Restaurant tags</h2>
+            <p className="mt-1 text-sm text-text-secondary">
+              Choose tags that describe your cuisine or style. Updates appear to customers only after an
+              admin approves them.
+            </p>
+          </div>
+          {tagCatalog.length === 0 ? (
+            <p className="text-sm text-text-secondary">No tags available yet.</p>
+          ) : (
+            <div className="flex flex-wrap gap-3">
+              {tagCatalog.map((tag) => (
+                <label key={tag.id} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedTagIds.includes(tag.id)}
+                    onChange={(e) => {
+                      setSelectedTagIds((prev) =>
+                        e.target.checked ? [...prev, tag.id] : prev.filter((id) => id !== tag.id)
+                      );
+                    }}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm">{tag.label}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => void saveTags()}
+            disabled={tagSaving || !restaurant}
+            className="rounded bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+          >
+            {tagSaving ? 'Saving…' : 'Save tags'}
+          </button>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">Certificate URL (optional)</label>

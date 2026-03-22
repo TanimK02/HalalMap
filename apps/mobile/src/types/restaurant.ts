@@ -1,5 +1,12 @@
 import type { BusinessHoursMap } from '../utils/businessHours';
 
+export type RestaurantTag = {
+  id: string;
+  slug: string;
+  label: string;
+  sortOrder: number;
+};
+
 /** Restaurant list item (e.g. Home screen). */
 export type Restaurant = {
   id: string;
@@ -7,6 +14,7 @@ export type Restaurant = {
   description: string | null;
   address: string;
   halalStatuses: string[];
+  tags?: RestaurantTag[];
   businessHours?: BusinessHoursMap;
   offersPickup: boolean;
   offersDelivery: boolean;
@@ -51,6 +59,7 @@ export type RestaurantDetailData = {
   latitude: number | null;
   longitude: number | null;
   halalStatuses: string[];
+  tags?: RestaurantTag[];
   businessHours?: BusinessHoursMap;
   menuCategories: MenuCategory[];
 };

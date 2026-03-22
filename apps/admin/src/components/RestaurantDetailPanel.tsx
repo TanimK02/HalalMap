@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import axios from 'axios';
 import { api } from '../api';
 import { useConfig } from '../ConfigContext';
 
@@ -30,6 +31,15 @@ export function getCertificateStatus(certificateExpiresAt: string | null): Certi
 
 type MenuItem = { id: string; name: string };
 type MenuCategory = { id: string; name: string; items: MenuItem[] };
+
+export type TagWithActive = {
+  id: string;
+  slug: string;
+  label: string;
+  sortOrder: number;
+  active: boolean;
+};
+
 export type RestaurantDetail = {
   id: string;
   name: string;
@@ -42,8 +52,11 @@ export type RestaurantDetail = {
   approved: boolean;
   offersPickup: boolean;
   offersDelivery: boolean;
+  hasPendingTagChanges?: boolean;
   owner: { id: string; name: string; email: string };
   menuCategories?: MenuCategory[];
+  publishedTags?: TagWithActive[];
+  draftTags?: TagWithActive[];
 };
 
 type Props = {
@@ -52,6 +65,8 @@ type Props = {
   showApproveButtons?: boolean;
   onApproved?: (id: string, approved: boolean) => void;
   onDetailUpdated?: (detail: RestaurantDetail) => void;
+  /** Called after admin approve / decline / override of restaurant tags (not on initial panel load). */
+  onRestaurantTagsChanged?: () => void;
 };
 
 export default function RestaurantDetailPanel({
@@ -60,10 +75,15 @@ export default function RestaurantDetailPanel({
   showApproveButtons = false,
   onApproved,
   onDetailUpdated,
+  onRestaurantTagsChanged,
 }: Props) {
   const { enableDelivery } = useConfig();
   const [detail, setDetail] = useState<RestaurantDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  const [adminTagCatalog, setAdminTagCatalog] = useState<TagWithActive[]>([]);
+  const [publishedEditorIds, setPublishedEditorIds] = useState<string[]>([]);
+  const [tagActionMessage, setTagActionMessage] = useState('');
+  const [tagBusy, setTagBusy] = useState(false);
 
   useEffect(() => {
     if (!restaurantId) {
@@ -77,8 +97,11 @@ export default function RestaurantDetailPanel({
       .get<RestaurantDetail>(`/admin/restaurants/${restaurantId}`, { signal: controller.signal })
       .then((r) => {
         if (!cancelled) {
-          setDetail(r.data);
-          onDetailUpdated?.(r.data);
+          const d = r.data as RestaurantDetail;
+          setDetail(d);
+          setPublishedEditorIds((d.publishedTags ?? []).filter((t) => t.active).map((t) => t.id));
+          setTagActionMessage('');
+          onDetailUpdated?.(d);
         }
       })
       .catch((err) => {
@@ -91,6 +114,17 @@ export default function RestaurantDetailPanel({
       cancelled = true;
       controller.abort();
     };
+  }, [restaurantId]);
+
+  useEffect(() => {
+    if (!restaurantId) {
+      setAdminTagCatalog([]);
+      return;
+    }
+    api
+      .get<TagWithActive[]>('/admin/tags')
+      .then((r) => setAdminTagCatalog(r.data))
+      .catch(() => setAdminTagCatalog([]));
   }, [restaurantId]);
 
   useEffect(() => {
@@ -110,6 +144,68 @@ export default function RestaurantDetailPanel({
       onApproved(id, approved);
     } catch {
       // leave detail as-is; caller can show error
+    }
+  }
+
+  async function handleApproveTags() {
+    if (!detail) return;
+    setTagBusy(true);
+    setTagActionMessage('');
+    try {
+      const { data } = await api.post<RestaurantDetail>(`/admin/restaurants/${detail.id}/tags/approve`);
+      setDetail(data);
+      setPublishedEditorIds((data.publishedTags ?? []).filter((t) => t.active).map((t) => t.id));
+      onDetailUpdated?.(data);
+      onRestaurantTagsChanged?.();
+      setTagActionMessage('Tags approved.');
+    } catch (err) {
+      setTagActionMessage(
+        axios.isAxiosError(err) && err.response?.data?.error ? err.response.data.error : 'Failed to approve tags'
+      );
+    } finally {
+      setTagBusy(false);
+    }
+  }
+
+  async function handleDeclineTags() {
+    if (!detail) return;
+    setTagBusy(true);
+    setTagActionMessage('');
+    try {
+      const { data } = await api.post<RestaurantDetail>(`/admin/restaurants/${detail.id}/tags/decline`);
+      setDetail(data);
+      setPublishedEditorIds((data.publishedTags ?? []).filter((t) => t.active).map((t) => t.id));
+      onDetailUpdated?.(data);
+      onRestaurantTagsChanged?.();
+      setTagActionMessage('Tag proposal declined.');
+    } catch (err) {
+      setTagActionMessage(
+        axios.isAxiosError(err) && err.response?.data?.error ? err.response.data.error : 'Failed to decline tags'
+      );
+    } finally {
+      setTagBusy(false);
+    }
+  }
+
+  async function handleApplyPublishedTags() {
+    if (!detail) return;
+    setTagBusy(true);
+    setTagActionMessage('');
+    try {
+      const { data } = await api.patch<RestaurantDetail>(`/admin/restaurants/${detail.id}/tags`, {
+        tagIds: publishedEditorIds,
+      });
+      setDetail(data);
+      setPublishedEditorIds((data.publishedTags ?? []).filter((t) => t.active).map((t) => t.id));
+      onDetailUpdated?.(data);
+      onRestaurantTagsChanged?.();
+      setTagActionMessage('Published tags updated.');
+    } catch (err) {
+      setTagActionMessage(
+        axios.isAxiosError(err) && err.response?.data?.error ? err.response.data.error : 'Failed to update tags'
+      );
+    } finally {
+      setTagBusy(false);
     }
   }
 
@@ -165,6 +261,73 @@ export default function RestaurantDetailPanel({
                 <span className="font-medium text-text-primary">Halal:</span>{' '}
                 {(detail.halalStatuses ?? []).map((s) => HALAL_STATUS_LABELS[s] ?? s).join(', ') || '—'}
               </p>
+              <div className="rounded border border-gray-200 bg-gray-50 p-3 space-y-2">
+                <p className="text-sm font-medium text-text-primary">Restaurant tags</p>
+                <p className="text-xs text-text-secondary">
+                  Live (customers see):{' '}
+                  {(detail.publishedTags ?? []).filter((t) => t.active).map((t) => t.label).join(', ') || '—'}
+                </p>
+                {detail.hasPendingTagChanges === true && (
+                  <>
+                    <p className="text-xs text-amber-800">
+                      Owner proposal:{' '}
+                      {(detail.draftTags ?? []).length > 0
+                        ? (detail.draftTags ?? []).map((t) => t.label).join(', ')
+                        : '(remove all tags)'}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={tagBusy}
+                        onClick={() => void handleApproveTags()}
+                        className="rounded bg-primary px-2 py-1 text-xs text-white hover:bg-primary/90 disabled:opacity-50"
+                      >
+                        Approve tags
+                      </button>
+                      <button
+                        type="button"
+                        disabled={tagBusy}
+                        onClick={() => void handleDeclineTags()}
+                        className="rounded border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Decline proposal
+                      </button>
+                    </div>
+                  </>
+                )}
+                <p className="text-xs font-medium text-text-primary pt-1">Set published tags (override)</p>
+                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                  {adminTagCatalog
+                    .filter((t) => t.active)
+                    .map((tag) => (
+                      <label key={tag.id} className="flex items-center gap-1 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={publishedEditorIds.includes(tag.id)}
+                          disabled={tagBusy}
+                          onChange={(e) => {
+                            setPublishedEditorIds((prev) =>
+                              e.target.checked ? [...prev, tag.id] : prev.filter((id) => id !== tag.id)
+                            );
+                          }}
+                          className="rounded border-gray-300"
+                        />
+                        {tag.label}
+                      </label>
+                    ))}
+                </div>
+                <button
+                  type="button"
+                  disabled={tagBusy}
+                  onClick={() => void handleApplyPublishedTags()}
+                  className="rounded border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Apply published tags
+                </button>
+                {tagActionMessage && (
+                  <p className="text-xs text-text-secondary">{tagActionMessage}</p>
+                )}
+              </div>
               <p className="text-sm text-text-secondary">
                 <span className="font-medium text-text-primary">Pickup:</span> {detail.offersPickup ? 'Yes' : 'No'}
                 {' · '}
