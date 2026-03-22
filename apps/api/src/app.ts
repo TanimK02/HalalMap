@@ -7,6 +7,7 @@ import { usersRouter } from './routes/users.js';
 import { restaurantsRouter } from './routes/restaurants.js';
 import { ordersRouter } from './routes/orders.js';
 import { adminRouter } from './routes/admin.js';
+import { tagsRouter } from './routes/tags.js';
 import { webhooksRouter } from './routes/webhooks.js';
 import { getConfig } from './lib/config.js';
 
@@ -46,6 +47,7 @@ app.use(limiter);
 
 app.use('/auth', authRouter);
 app.use('/users', usersRouter);
+app.use('/tags', tagsRouter);
 app.use('/restaurants', restaurantsRouter);
 app.use('/orders', ordersRouter);
 app.use('/admin', adminRouter);

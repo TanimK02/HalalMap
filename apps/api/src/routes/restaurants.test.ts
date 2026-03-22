@@ -3,12 +3,28 @@ import { app } from '../app.js';
 
 jest.mock('../lib/prisma.js', () => ({
   prisma: {
+    $transaction: jest.fn(),
     restaurant: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+    },
+    tag: {
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+    },
+    restaurantTagDraft: {
+      deleteMany: jest.fn(),
+      createMany: jest.fn(),
+      findMany: jest.fn(),
+    },
+    restaurantPublishedTag: {
+      deleteMany: jest.fn(),
+      createMany: jest.fn(),
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
     },
     menuCategory: {
       findFirst: jest.fn(),
@@ -44,6 +60,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  prisma.$transaction.mockImplementation((fn: (tx: typeof prisma) => Promise<unknown>) => fn(prisma));
   (jwt.verify as jest.Mock).mockImplementation((token: string) => {
     if (token === validToken) {
       return { userId: 'user-123', email: 'u@example.com', role: 'CUSTOMER' };
@@ -58,7 +75,19 @@ beforeEach(() => {
 describe('GET /restaurants/', () => {
   it('returns 200 with list of approved restaurants (no auth required)', async () => {
     (prisma.restaurant.findMany as jest.Mock).mockResolvedValue([
-      { id: 'r1', name: 'Halal Place', approved: true, offersPickup: true, offersDelivery: false },
+      {
+        id: 'r1',
+        name: 'Halal Place',
+        description: null,
+        phone: null,
+        address: '1 Main',
+        halalStatuses: [],
+        certificateExpiresAt: null,
+        offersPickup: true,
+        offersDelivery: false,
+        businessHours: null,
+        publishedTags: [],
+      },
     ]);
 
     const res = await request(app).get('/restaurants/');
@@ -92,6 +121,7 @@ describe('GET /restaurants/:id', () => {
       name: 'Halal Place',
       approved: true,
       menuCategories: [{ items: [] }],
+      publishedTags: [],
     });
 
     const res = await request(app).get('/restaurants/r1');
@@ -99,6 +129,7 @@ describe('GET /restaurants/:id', () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ id: 'r1', name: 'Halal Place' });
     expect(res.body.menuCategories).toBeDefined();
+    expect(res.body.tags).toEqual([]);
   });
 });
 
@@ -128,13 +159,19 @@ describe('GET /restaurants/me/restaurant', () => {
       id: 'r1',
       name: 'My Restaurant',
       ownerId: 'owner-1',
+      hasPendingTagChanges: false,
       menuCategories: [],
+      publishedTags: [],
+      tagDrafts: [],
     });
 
     const res = await request(app).get('/restaurants/me/restaurant').set(auth(ownerToken));
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ id: 'r1', name: 'My Restaurant' });
+    expect(res.body.publishedTags).toEqual([]);
+    expect(res.body.draftTags).toEqual([]);
+    expect(res.body.hasPendingTagChanges).toBe(false);
   });
 });
 
@@ -214,5 +251,55 @@ describe('GET /restaurants/me/restaurant/categories', () => {
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body[0]).toMatchObject({ id: 'c1', name: 'Mains' });
+  });
+});
+
+describe('PUT /restaurants/me/restaurant/tags', () => {
+  it('returns 401 when no token', async () => {
+    const res = await request(app).put('/restaurants/me/restaurant/tags').send({ tagIds: [] });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 200 and clears pending when proposal matches published', async () => {
+    (prisma.restaurant.findUnique as jest.Mock)
+      .mockResolvedValueOnce({ id: 'r1' })
+      .mockResolvedValueOnce({
+        id: 'r1',
+        name: 'R',
+        ownerId: 'owner-1',
+        hasPendingTagChanges: false,
+        menuCategories: [],
+        publishedTags: [
+          {
+            tag: { id: 't1', slug: 'a', label: 'A', sortOrder: 0, active: true },
+          },
+        ],
+        tagDrafts: [],
+      });
+    (prisma.tag.findMany as jest.Mock).mockResolvedValue([{ id: 't1' }]);
+    (prisma.restaurantPublishedTag.findMany as jest.Mock).mockResolvedValue([{ tagId: 't1' }]);
+    (prisma.restaurantTagDraft.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+    (prisma.restaurant.update as jest.Mock).mockResolvedValue({});
+
+    const res = await request(app)
+      .put('/restaurants/me/restaurant/tags')
+      .set(auth(ownerToken))
+      .send({ tagIds: ['t1'] });
+
+    expect(res.status).toBe(200);
+    expect(prisma.restaurantTagDraft.createMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /tags', () => {
+  it('returns active tags', async () => {
+    (prisma.tag.findMany as jest.Mock).mockResolvedValue([
+      { id: 't1', slug: 'indian', label: 'Indian', sortOrder: 0 },
+    ]);
+
+    const res = await request(app).get('/tags');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([{ id: 't1', slug: 'indian', label: 'Indian', sortOrder: 0 }]);
   });
 });

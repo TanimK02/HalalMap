@@ -3,13 +3,15 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { Alert } from 'react-native';
 import { api } from '../api';
-import type { Restaurant, AddressWithCoords } from '../types/restaurant';
+import type { Restaurant, AddressWithCoords, RestaurantTag } from '../types/restaurant';
 
 export function useHomeRestaurants() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [halalFilters, setHalalFilters] = useState<string[]>([]);
+  const [tagFilters, setTagFilters] = useState<string[]>([]);
+  const [tagCatalog, setTagCatalog] = useState<RestaurantTag[]>([]);
   const [search, setSearch] = useState('');
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationResolving, setLocationResolving] = useState(true);
@@ -53,9 +55,23 @@ export function useHomeRestaurants() {
     }, [resolveLocation])
   );
 
+  useEffect(() => {
+    api
+      .get<RestaurantTag[]>('/tags')
+      .then((r) => setTagCatalog(r.data ?? []))
+      .catch(() => setTagCatalog([]));
+  }, []);
+
   const load = useCallback(() => {
-    const params: { halalStatuses?: string; search?: string; lat?: string; lng?: string } = {};
+    const params: {
+      halalStatuses?: string;
+      tags?: string;
+      search?: string;
+      lat?: string;
+      lng?: string;
+    } = {};
     if (halalFilters.length > 0) params.halalStatuses = halalFilters.join(',');
+    if (tagFilters.length > 0) params.tags = tagFilters.join(',');
     if (search.trim()) params.search = search.trim();
     if (location) {
       params.lat = String(location.lat);
@@ -76,11 +92,11 @@ export function useHomeRestaurants() {
         setLoading(false);
         setRefreshing(false);
       });
-  }, [halalFilters, search, location]);
+  }, [halalFilters, tagFilters, search, location]);
 
   useEffect(() => {
     if (!locationResolving) load();
-  }, [locationResolving, halalFilters, search, location, load]);
+  }, [locationResolving, halalFilters, tagFilters, search, location, load]);
 
   function toggleHalalFilter(value: string) {
     if (!value) {
@@ -89,6 +105,12 @@ export function useHomeRestaurants() {
     }
     setHalalFilters((prev) =>
       prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]
+    );
+  }
+
+  function toggleTagFilter(tagId: string) {
+    setTagFilters((prev) =>
+      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
     );
   }
 
@@ -139,6 +161,9 @@ export function useHomeRestaurants() {
     setSliderValue,
     halalFilters,
     toggleHalalFilter,
+    tagCatalog,
+    tagFilters,
+    toggleTagFilter,
     search,
     setSearch,
     location,

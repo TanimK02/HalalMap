@@ -10,12 +10,16 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { brand, HALAL_LABELS } from '../theme';
 import { RadiusSlider } from './RadiusSlider';
+import type { RestaurantTag } from '../types/restaurant';
 
 export type HomeFiltersProps = {
   search: string;
   onSearchChange: (v: string) => void;
   halalFilters: string[];
   onToggleHalalFilter: (value: string) => void;
+  tagCatalog: RestaurantTag[];
+  tagFilters: string[];
+  onToggleTagFilter: (tagId: string) => void;
   radiusMiles: number;
   onRadiusChange: (v: number) => void;
   distanceExpanded: boolean;
@@ -38,6 +42,9 @@ export function HomeFilters({
   onSearchChange,
   halalFilters,
   onToggleHalalFilter,
+  tagCatalog,
+  tagFilters,
+  onToggleTagFilter,
   radiusMiles,
   onRadiusChange,
   distanceExpanded,
@@ -119,6 +126,33 @@ export function HomeFilters({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterList}
       />
+      {tagCatalog.length > 0 ? (
+        <View style={styles.tagSection}>
+          <Text style={styles.tagSectionLabel}>Tags</Text>
+          <FlatList
+            horizontal
+            data={tagCatalog}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => {
+              const isActive = tagFilters.includes(item.id);
+              return (
+                <TouchableOpacity
+                  style={[styles.filterChip, isActive && styles.filterChipActive]}
+                  onPress={() => onToggleTagFilter(item.id)}
+                >
+                  <Text
+                    style={[styles.filterChipText, isActive && styles.filterChipTextActive]}
+                  >
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            }}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterList}
+          />
+        </View>
+      ) : null}
       {hasDistanceData && (
         <>
           <TouchableOpacity
@@ -203,6 +237,13 @@ const styles = StyleSheet.create({
   manualButtonDisabled: { opacity: 0.6 },
   manualButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   filterList: { gap: 8 },
+  tagSection: { marginTop: 10 },
+  tagSectionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: brand.textSecondary,
+    marginBottom: 6,
+  },
   filterChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,

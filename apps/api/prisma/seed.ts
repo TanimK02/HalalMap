@@ -17,6 +17,21 @@ async function main() {
   });
   console.log('Admin user:', admin.email);
 
+  const tagDefs = [
+    { slug: 'indian', label: 'Indian', sortOrder: 0 },
+    { slug: 'pakistani', label: 'Pakistani', sortOrder: 1 },
+    { slug: 'middle-eastern', label: 'Middle Eastern', sortOrder: 2 },
+    { slug: 'fast-food', label: 'Fast food', sortOrder: 3 },
+    { slug: 'family-friendly', label: 'Family-friendly', sortOrder: 4 },
+  ];
+  for (const t of tagDefs) {
+    await prisma.tag.upsert({
+      where: { slug: t.slug },
+      update: { label: t.label, sortOrder: t.sortOrder, active: true },
+      create: { slug: t.slug, label: t.label, sortOrder: t.sortOrder },
+    });
+  }
+
   const ownerHash = await bcrypt.hash('owner123', 10);
   const owner = await prisma.user.upsert({
     where: { email: 'owner@halalmap.com' },
@@ -75,6 +90,20 @@ async function main() {
       restaurant = await prisma.restaurant.update({
         where: { id: restaurant.id },
         data: updates,
+      });
+    }
+  }
+
+  const indianTag = await prisma.tag.findUnique({ where: { slug: 'indian' } });
+  if (indianTag) {
+    const hasPub = await prisma.restaurantPublishedTag.findUnique({
+      where: {
+        restaurantId_tagId: { restaurantId: restaurant.id, tagId: indianTag.id },
+      },
+    });
+    if (!hasPub) {
+      await prisma.restaurantPublishedTag.create({
+        data: { restaurantId: restaurant.id, tagId: indianTag.id },
       });
     }
   }

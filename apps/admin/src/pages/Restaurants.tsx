@@ -12,6 +12,7 @@ type Restaurant = {
   certificateUrl: string | null;
   certificateExpiresAt: string | null;
   approved: boolean;
+  hasPendingTagChanges?: boolean;
   owner: { id: string; name: string; email: string };
   createdAt: string;
 };
@@ -26,6 +27,7 @@ export default function Restaurants() {
   const [search, setSearch] = useState('');
   const [approvalFilter, setApprovalFilter] = useState<'all' | 'approved' | 'pending'>('all');
   const [halalFilter, setHalalFilter] = useState('');
+  const [tagReviewOnly, setTagReviewOnly] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -72,8 +74,11 @@ export default function Restaurants() {
     if (halalFilter) {
       list = list.filter((r) => (r.halalStatuses ?? []).includes(halalFilter));
     }
+    if (tagReviewOnly) {
+      list = list.filter((r) => r.hasPendingTagChanges === true);
+    }
     return list;
-  }, [restaurants, approvalFilter, search, halalFilter]);
+  }, [restaurants, approvalFilter, search, halalFilter, tagReviewOnly]);
 
   if (loading) return <div className="text-text-secondary">Loading...</div>;
 
@@ -115,6 +120,15 @@ export default function Restaurants() {
             ))}
           </select>
         </div>
+        <label className="flex items-center gap-2 text-sm text-text-secondary">
+          <input
+            type="checkbox"
+            checked={tagReviewOnly}
+            onChange={(e) => setTagReviewOnly(e.target.checked)}
+            className="rounded border-gray-300"
+          />
+          Tag review pending
+        </label>
       </div>
       <div className="overflow-x-auto rounded border border-gray-200 bg-surface">
         <table className="min-w-full divide-y divide-gray-200">
@@ -150,13 +164,20 @@ export default function Restaurants() {
                     </td>
                     <td className="px-4 py-2 text-sm text-text-secondary">{r.owner?.email ?? '—'}</td>
                     <td className="px-4 py-2">
-                      <span
-                        className={`inline-block rounded px-2 py-0.5 text-sm ${
-                          r.approved ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {r.approved ? 'Approved' : 'Pending'}
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span
+                          className={`inline-block w-fit rounded px-2 py-0.5 text-sm ${
+                            r.approved ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {r.approved ? 'Approved' : 'Pending'}
+                        </span>
+                        {r.hasPendingTagChanges === true && (
+                          <span className="w-fit rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-900">
+                            Tags pending
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-2">
                       {certStatus.status !== 'none' ? (

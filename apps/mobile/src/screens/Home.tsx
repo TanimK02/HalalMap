@@ -37,6 +37,9 @@ export default function Home() {
     setSliderValue,
     halalFilters,
     toggleHalalFilter,
+    tagCatalog,
+    tagFilters,
+    toggleTagFilter,
     search,
     setSearch,
     location,
@@ -95,6 +98,9 @@ export default function Home() {
         onSearchChange={setSearch}
         halalFilters={halalFilters}
         onToggleHalalFilter={toggleHalalFilter}
+        tagCatalog={tagCatalog}
+        tagFilters={tagFilters}
+        onToggleTagFilter={toggleTagFilter}
         radiusMiles={radiusMiles}
         onRadiusChange={setRadiusMiles}
         distanceExpanded={distanceFilterExpanded}

@@ -12,6 +12,7 @@ type Restaurant = {
   certificateUrl: string | null;
   certificateExpiresAt: string | null;
   approved: boolean;
+  hasPendingTagChanges?: boolean;
   owner: { id: string; name: string; email: string };
   createdAt: string;
 };
@@ -86,7 +87,12 @@ export default function Moderation() {
             return (
               <div key={r.id} className="rounded border border-gray-200 bg-surface p-4">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-medium">{r.name}</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{r.name}</span>
+                    {r.hasPendingTagChanges === true && (
+                      <span className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-900">Tags pending</span>
+                    )}
+                  </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {certStatus.status !== 'none' && (
                       <span
