@@ -29,11 +29,6 @@ export function RestaurantCard({ restaurant, onPress }: RestaurantCardProps) {
               </View>
             );
           })}
-          {(restaurant.tags ?? []).map((tag) => (
-            <View key={tag.id} style={[styles.badge, styles.tagBadge]}>
-              <Text style={[styles.badgeText, styles.tagBadgeText]}>{tag.label}</Text>
-            </View>
-          ))}
         </View>
       </View>
       {restaurant.description ? (
@@ -99,8 +94,6 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 18, fontWeight: '600', color: brand.textPrimary, flex: 1 },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  tagBadge: { backgroundColor: '#E0E7FF' },
-  tagBadgeText: { color: '#3730A3' },
   badgeText: { fontSize: 12, fontWeight: '600' },
   cardDesc: { fontSize: 14, color: brand.textSecondary, marginBottom: 4 },
   cardHoursPill: {

@@ -42,10 +42,13 @@ export function RadiusSlider({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (evt) => {
-        trackRef.current?.measureInWindow((x, _y, width) => {
-          layoutRef.current = { x, width };
+        trackRef.current?.measureInWindow((x, _y, _measuredWidth) => {
+          // Use width from onLayout only — measureInWindow width can differ and
+          // inflate the denominator so ratio never reaches 1 at the right edge.
+          layoutRef.current.x = x;
+          const { width } = layoutRef.current;
           const pageX = evt.nativeEvent.pageX ?? 0;
-          const ratio = (pageX - x) / width;
+          const ratio = width > 0 ? (pageX - x) / width : 0;
           const raw = clamp(min + ratio * (max - min));
           setLiveValue(raw);
           const rounded = clampAndRound(raw);
@@ -56,7 +59,7 @@ export function RadiusSlider({
       onPanResponderMove: (evt) => {
         const { x, width } = layoutRef.current;
         const pageX = evt.nativeEvent.pageX ?? 0;
-        const ratio = (pageX - x) / width;
+        const ratio = width > 0 ? (pageX - x) / width : 0;
         const raw = clamp(min + ratio * (max - min));
         setLiveValue(raw);
         const rounded = clampAndRound(raw);
@@ -88,7 +91,14 @@ export function RadiusSlider({
       {...panResponder.panHandlers}
     >
       <View style={styles.track}>
-        <View style={[styles.filledTrack, { width: `${ratio * 100}%` }]} />
+        <View
+          style={[
+            styles.filledTrack,
+            trackWidth > SLIDER_THUMB_SIZE
+              ? { width: thumbLeft + SLIDER_THUMB_SIZE }
+              : { width: `${ratio * 100}%` },
+          ]}
+        />
       </View>
       <View style={[styles.thumb, { left: thumbLeft }]} />
     </View>
@@ -122,6 +132,7 @@ const styles = StyleSheet.create({
     borderRadius: SLIDER_THUMB_SIZE / 2,
     backgroundColor: brand.primary,
     top: (40 - SLIDER_THUMB_SIZE) / 2,
-    marginLeft: -SLIDER_THUMB_SIZE / 2,
+    zIndex: 1,
+    elevation: 4,
   },
 });

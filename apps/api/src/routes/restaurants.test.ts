@@ -103,6 +103,39 @@ describe('GET /restaurants/', () => {
     expect(res.status).toBe(400);
     expect(res.body.errors).toBeDefined();
   });
+
+  it('includes published tag label/slug in search OR clause', async () => {
+    (prisma.restaurant.findMany as jest.Mock).mockResolvedValue([]);
+
+    await request(app).get('/restaurants/?search=afghan');
+
+    expect(prisma.restaurant.findMany).toHaveBeenCalled();
+    const arg = (prisma.restaurant.findMany as jest.Mock).mock.calls[0][0];
+    const and = arg.where.AND as Record<string, unknown>[];
+    const searchBlock = and.find((w) => 'OR' in w && Array.isArray((w as { OR: unknown[] }).OR)) as {
+      OR: unknown[];
+    };
+    expect(searchBlock).toBeDefined();
+    expect(searchBlock.OR).toEqual(
+      expect.arrayContaining([
+        { name: { contains: 'afghan', mode: 'insensitive' } },
+        { description: { contains: 'afghan', mode: 'insensitive' } },
+        {
+          publishedTags: {
+            some: {
+              tag: {
+                active: true,
+                OR: [
+                  { label: { contains: 'afghan', mode: 'insensitive' } },
+                  { slug: { contains: 'afghan', mode: 'insensitive' } },
+                ],
+              },
+            },
+          },
+        },
+      ])
+    );
+  });
 });
 
 describe('GET /restaurants/:id', () => {
