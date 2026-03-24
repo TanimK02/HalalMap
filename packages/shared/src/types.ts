@@ -3,9 +3,7 @@ export type UserRole = 'CUSTOMER' | 'RESTAURANT_OWNER' | 'ADMIN';
 export type HalalStatus =
   | 'CERTIFIED_HALAL'
   | 'MUSLIM_OWNED'
-  | 'HALAL_FRIENDLY'
-  | 'PROCLAIMED_HALAL'
-  | 'SOME_HALAL';
+  | 'HALAL_FRIENDLY';
 
 /** Restaurant halal statuses are stored and sent as an array (multiple statuses per restaurant). */
 export type HalalStatusList = HalalStatus[];
@@ -30,8 +28,6 @@ export const HALAL_STATUS_LABELS: Record<HalalStatus, string> = {
   CERTIFIED_HALAL: 'Certified Halal',
   MUSLIM_OWNED: 'Muslim-Owned',
   HALAL_FRIENDLY: 'Halal-Friendly',
-  PROCLAIMED_HALAL: 'Proclaimed Halal',
-  SOME_HALAL: 'Some Halal',
 };
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {

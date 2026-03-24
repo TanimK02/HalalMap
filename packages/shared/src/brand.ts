@@ -15,6 +15,4 @@ export const halalBadgeStyles: Record<
   CERTIFIED_HALAL: { bg: '#0F7A5C', text: '#FFFFFF' },
   MUSLIM_OWNED: { bg: '#3ECF8E', text: '#1F2933' },
   HALAL_FRIENDLY: { bg: '#E5E7EB', text: '#0F7A5C' },
-  PROCLAIMED_HALAL: { bg: '#E5E7EB', text: '#1F2933' },
-  SOME_HALAL: { bg: '#E5E7EB', text: '#1F2933' },
 };
