@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
-import { api, getStoredToken, setStoredToken } from '../api';
+import axios from 'axios';
+import { api, getStoredToken, setAuthInvalidHandler, setStoredToken } from '../api';
 
 type User = { id: string; name: string; email: string; role: string };
 
@@ -38,6 +39,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    setAuthInvalidHandler(() => {
+      setUser(null);
+      setToken(null);
+    });
+    return () => setAuthInvalidHandler(null);
+  }, []);
+
+  useEffect(() => {
     getStoredToken().then((t) => {
       if (!t) {
         setLoading(false);
@@ -47,8 +56,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       api
         .get('/auth/me')
         .then((r) => setUser(r.data))
-        .catch(() => setStoredToken(null).then(() => setToken(null)))
+        .catch((error) => {
+          const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+          // Only clear local auth state here for auth-invalid responses.
+          // Other failures (e.g. transient network issues) should not force logout.
+          if (status === 401 || status === 404) {
+            setUser(null);
+            setToken(null);
+          }
+        })
         .finally(() => setLoading(false));
+
     });
   }, []);
 

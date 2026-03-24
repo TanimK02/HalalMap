@@ -99,12 +99,14 @@ function MainTabs() {
 }
 
 function AppNavigator() {
-  const { token, loading } = useAuth();
+  const { token, user, loading } = useAuth();
 
   if (loading) return null;
 
   const NavContainer = NavigationContainer as React.ComponentType<any>;
   const StackNav = Stack.Navigator as React.ComponentType<any>;
+  const isAuthenticated = Boolean(token && user);
+
   return (
     <NavContainer>
       <StackNav
@@ -114,7 +116,7 @@ function AppNavigator() {
           contentStyle: { backgroundColor: brand.background },
         }}
       >
-        {!token ? (
+        {!isAuthenticated ? (
           <>
             <Stack.Screen name="Login" component={Login} options={{ headerShown: false }} />
             <Stack.Screen name="Register" component={Register} options={{ title: 'Sign up' }} />

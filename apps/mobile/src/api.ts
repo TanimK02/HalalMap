@@ -9,6 +9,8 @@ export const api = axios.create({
 });
 
 const TOKEN_KEY = 'halal_map_token';
+let onAuthInvalid: (() => void) | null = null;
+let isHandlingAuthInvalid = false;
 
 api.interceptors.request.use(async (config) => {
   try {
@@ -18,6 +20,33 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+async function handleAuthInvalid() {
+  if (isHandlingAuthInvalid) return;
+  isHandlingAuthInvalid = true;
+  try {
+    await setStoredToken(null);
+    onAuthInvalid?.();
+  } finally {
+    isHandlingAuthInvalid = false;
+  }
+}
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const status = error?.response?.status;
+    const url = error?.config?.url as string | undefined;
+    const isAuthLoginRequest = typeof url === 'string' && url.includes('/auth/login');
+    const isAuthRegisterRequest = typeof url === 'string' && url.includes('/auth/register');
+    const shouldSkipGlobalLogout = isAuthLoginRequest || isAuthRegisterRequest;
+    const isAuthMeNotFound = status === 404 && typeof url === 'string' && url.includes('/auth/me');
+    if (!shouldSkipGlobalLogout && (status === 401 || isAuthMeNotFound)) {
+      await handleAuthInvalid();
+    }
+    return Promise.reject(error);
+  }
+);
+
 export async function setStoredToken(token: string | null) {
   if (token) await AsyncStorage.setItem(TOKEN_KEY, token);
   else await AsyncStorage.removeItem(TOKEN_KEY);
@@ -25,6 +54,10 @@ export async function setStoredToken(token: string | null) {
 
 export async function getStoredToken() {
   return AsyncStorage.getItem(TOKEN_KEY);
+}
+
+export function setAuthInvalidHandler(handler: (() => void) | null) {
+  onAuthInvalid = handler;
 }
 
 // Favorites (require auth)

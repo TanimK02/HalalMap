@@ -113,7 +113,7 @@ export function HomeFilters({
               halalExpanded && styles.expandButtonTextActive,
             ]}
           >
-            Halal types
+            Halal status
           </Text>
         </View>
         <Text

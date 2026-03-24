@@ -73,6 +73,6 @@ authRouter.get('/me', requireAuth, async (req: AuthRequest, res) => {
     where: { id: req.userId! },
     select: { id: true, name: true, email: true, role: true, createdAt: true },
   });
-  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
   return res.json(user);
 });
