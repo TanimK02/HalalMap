@@ -16,7 +16,7 @@ describe('CartContext', () => {
     expect(result.current.restaurantId).toBe('r1');
   });
 
-  it('tracks active restaurant and includes newly added item', () => {
+  it('replaces cart when adding from a different restaurant', () => {
     const wrapper = ({ children }: { children: React.ReactNode }) => <CartProvider>{children}</CartProvider>;
     const { result } = renderHook(() => useCart(), { wrapper });
 
@@ -26,6 +26,8 @@ describe('CartContext', () => {
     });
 
     expect(result.current.restaurantId).toBe('r2');
-    expect(result.current.items.some((i) => i.menuItemId === 'm2')).toBe(true);
+    expect(result.current.items).toHaveLength(1);
+    expect(result.current.items[0].menuItemId).toBe('m2');
+    expect(result.current.total).toBe(8);
   });
 });

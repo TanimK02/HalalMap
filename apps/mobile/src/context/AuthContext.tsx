@@ -63,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (status === 401 || status === 404) {
             setUser(null);
             setToken(null);
+            void setStoredToken(null);
           }
         })
         .finally(() => setLoading(false));
