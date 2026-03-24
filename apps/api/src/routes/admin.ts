@@ -17,8 +17,6 @@ const HALAL_STATUS_VALUES: HalalStatus[] = [
   'CERTIFIED_HALAL',
   'MUSLIM_OWNED',
   'HALAL_FRIENDLY',
-  'PROCLAIMED_HALAL',
-  'SOME_HALAL',
 ];
 
 const stripe = process.env.STRIPE_SECRET_KEY

@@ -18,7 +18,7 @@ import {
 } from '../lib/restaurantTags.js';
 
 const HALAL_STATUS_VALUES: HalalStatus[] = [
-  'CERTIFIED_HALAL', 'MUSLIM_OWNED', 'HALAL_FRIENDLY', 'PROCLAIMED_HALAL', 'SOME_HALAL',
+  'CERTIFIED_HALAL', 'MUSLIM_OWNED', 'HALAL_FRIENDLY',
 ];
 
 export const restaurantsRouter = Router();
