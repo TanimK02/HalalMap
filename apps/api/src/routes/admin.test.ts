@@ -26,6 +26,7 @@ jest.mock('../lib/prisma.js', () => ({
     },
     user: {
       findMany: jest.fn(),
+      findUnique: jest.fn(),
     },
     order: {
       findMany: jest.fn(),
@@ -65,6 +66,9 @@ beforeEach(() => {
     }
     throw new Error('invalid');
   });
+  (prisma.user.findUnique as jest.Mock).mockImplementation(({ where: { id } }: { where: { id: string } }) =>
+    Promise.resolve(id === 'admin-1' || id === 'user-123' ? { id } : null)
+  );
 });
 
 describe('Admin routes require ADMIN role', () => {

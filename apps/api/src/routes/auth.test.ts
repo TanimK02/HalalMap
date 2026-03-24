@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { app } from '../app.js';
+import { requireAuth } from '../middleware/auth.js';
 
 jest.mock('../lib/prisma.js', () => ({
   prisma: {
@@ -188,25 +189,30 @@ describe('GET /auth/me', () => {
     expect(res.body.error).toBe('Unauthorized');
   });
 
-  it('returns 404 when user not found', async () => {
-    (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+  it('returns 401 when user missing after token validates (requireAuth then /me lookup)', async () => {
+    (prisma.user.findUnique as jest.Mock)
+      .mockResolvedValueOnce({ id: 'user-123' })
+      .mockResolvedValueOnce(null);
 
     const res = await request(app)
       .get('/auth/me')
       .set('Authorization', 'Bearer valid-token');
 
-    expect(res.status).toBe(404);
-    expect(res.body.error).toBe('User not found');
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('Unauthorized');
   });
 
   it('returns 200 with user when token valid and user exists', async () => {
-    (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+    const userRow = {
       id: 'user-123',
       name: 'Me',
       email: 'u@example.com',
       role: 'CUSTOMER',
       createdAt: new Date(),
-    });
+    };
+    (prisma.user.findUnique as jest.Mock)
+      .mockResolvedValueOnce({ id: 'user-123' })
+      .mockResolvedValueOnce(userRow);
 
     const res = await request(app)
       .get('/auth/me')
@@ -219,5 +225,67 @@ describe('GET /auth/me', () => {
       email: 'u@example.com',
       role: 'CUSTOMER',
     });
+  });
+});
+
+describe('requireAuth middleware (unit)', () => {
+  function mockReq(overrides: Partial<{ headers: Record<string, string> }> = {}) {
+    return { headers: {}, ...overrides } as any;
+  }
+  function mockRes() {
+    const res: any = {};
+    res.status = jest.fn().mockReturnValue(res);
+    res.json = jest.fn().mockReturnValue(res);
+    return res;
+  }
+  function mockNext() {
+    return jest.fn();
+  }
+
+  it('returns 401 when no Authorization header', async () => {
+    const req = mockReq({ headers: {} });
+    const res = mockRes();
+    const next = mockNext();
+    await requireAuth(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Unauthorized' });
+    expect(next).not.toHaveBeenCalled();
+    expect(jwt.verify).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 when Authorization does not start with Bearer ', async () => {
+    const req = mockReq({ headers: { authorization: 'Basic xyz' } });
+    const res = mockRes();
+    const next = mockNext();
+    await requireAuth(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 when token is invalid or expired', async () => {
+    const req = mockReq({ headers: { authorization: 'Bearer bad-token' } });
+    const res = mockRes();
+    const next = mockNext();
+    (jwt.verify as jest.Mock).mockImplementation(() => {
+      throw new Error('invalid');
+    });
+    await requireAuth(req, res, next);
+    expect(jwt.verify).toHaveBeenCalledWith('bad-token', process.env.JWT_SECRET);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid or expired token' });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('calls next and sets req.userId and req.userRole when token is valid and user exists', async () => {
+    const req = mockReq({ headers: { authorization: 'Bearer valid-token' } });
+    const res = mockRes();
+    const next = mockNext();
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-123' });
+    await requireAuth(req, res, next);
+    expect(jwt.verify).toHaveBeenCalledWith('valid-token', process.env.JWT_SECRET);
+    expect(req.userId).toBe('user-123');
+    expect(req.userRole).toBe('CUSTOMER');
+    expect(next).toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
   });
 });

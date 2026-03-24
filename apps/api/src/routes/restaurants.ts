@@ -8,6 +8,7 @@ import Stripe from 'stripe';
 import { geocode, haversineMiles } from '../lib/geocode.js';
 import { requireAuth, requireRole, AuthRequest } from '../middleware/auth.js';
 import { isS3Configured, getPresignedUploadUrl } from '../lib/s3.js';
+import type { $Enums } from '@prisma/client';
 import type { HalalStatus } from '@halal-map/shared';
 import {
   getPublishedTagIds,
@@ -76,7 +77,9 @@ restaurantsRouter.get(
 
     const whereParts: Prisma.RestaurantWhereInput[] = [{ approved: true }];
     if (halalStatusesParam.length > 0) {
-      whereParts.push({ halalStatuses: { hasEvery: halalStatusesParam as HalalStatus[] } });
+      whereParts.push({
+        halalStatuses: { hasEvery: halalStatusesParam as $Enums.HalalStatus[] },
+      });
     }
     if (search) {
       whereParts.push({
@@ -408,7 +411,9 @@ restaurantsRouter.patch(
         ...(req.body.phone !== undefined && { phone: req.body.phone || null }),
         ...(req.body.address != null && { address: req.body.address }),
         ...(req.body.address != null && (latLng != null ? { latitude: latLng.latitude, longitude: latLng.longitude } : { latitude: null, longitude: null })),
-        ...(req.body.halalStatuses != null && { halalStatuses: req.body.halalStatuses as HalalStatus[] }),
+        ...(req.body.halalStatuses != null && {
+          halalStatuses: req.body.halalStatuses as $Enums.HalalStatus[],
+        }),
         ...(req.body.certificateUrl !== undefined && { certificateUrl: req.body.certificateUrl || null }),
         ...(req.body.certificateExpiresAt !== undefined && {
           certificateExpiresAt: req.body.certificateExpiresAt

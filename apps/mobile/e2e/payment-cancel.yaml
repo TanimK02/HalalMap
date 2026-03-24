@@ -1,0 +1,17 @@
+appId: com.tanimkhan.halalmap
+---
+- launchApp
+- tapOn: "Login"
+- tapOn: "Email"
+- inputText: "customer@example.com"
+- tapOn: "Password"
+- inputText: "password123"
+- tapOn: "Sign in"
+- tapOn:
+    id: "restaurant-card-0"
+- tapOn: "Add to cart"
+- tapOn: "Cart"
+- tapOn: "Checkout"
+- assertVisible: "Payment"
+- tapOn: "Close"
+- assertVisible: "Cart"

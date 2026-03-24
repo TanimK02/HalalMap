@@ -3,6 +3,11 @@ import { app } from '../app.js';
 
 jest.mock('../lib/prisma.js', () => ({
   prisma: {
+    user: {
+      findUnique: jest.fn().mockImplementation(({ where: { id } }: { where: { id: string } }) =>
+        Promise.resolve(id ? { id } : null)
+      ),
+    },
     order: {
       findUnique: jest.fn(),
       create: jest.fn(),
@@ -58,6 +63,8 @@ jest.mock('stripe', () => {
 
 jest.mock('../lib/config.js', () => ({
   isDeliveryEnabled: jest.fn().mockReturnValue(true),
+  isStripeConnectEnabled: jest.fn().mockReturnValue(false),
+  getConfig: jest.fn().mockReturnValue({ enableDelivery: true, stripeConnectEnabled: false }),
 }));
 
 const { prisma } = require('../lib/prisma.js');

@@ -4,6 +4,9 @@ import { Decimal } from '@prisma/client/runtime/library';
 
 jest.mock('../lib/prisma.js', () => ({
   prisma: {
+    user: {
+      findUnique: jest.fn(),
+    },
     restaurant: {
       findFirst: jest.fn(),
       findUnique: jest.fn(),
@@ -48,6 +51,9 @@ beforeEach(() => {
     }
     throw new Error('invalid');
   });
+  (prisma.user.findUnique as jest.Mock).mockImplementation(({ where: { id } }: { where: { id: string } }) =>
+    Promise.resolve(id === 'user-123' || id === 'owner-1' ? { id } : null)
+  );
 });
 
 describe('POST /orders/', () => {

@@ -2,7 +2,13 @@ import request from 'supertest';
 import { app } from '../app.js';
 
 jest.mock('../lib/prisma.js', () => ({
-  prisma: {},
+  prisma: {
+    user: {
+      findUnique: jest.fn().mockImplementation(({ where: { id } }: { where: { id: string } }) =>
+        Promise.resolve(id ? { id } : null)
+      ),
+    },
+  },
 }));
 
 describe('GET /health', () => {

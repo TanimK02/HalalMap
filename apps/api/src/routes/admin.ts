@@ -11,6 +11,7 @@ import {
   type TagWithActive,
 } from '../lib/restaurantTags.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import type { $Enums } from '@prisma/client';
 import type { HalalStatus } from '@halal-map/shared';
 
 const HALAL_STATUS_VALUES: HalalStatus[] = [
@@ -121,7 +122,7 @@ adminRouter.post(
           address: restaurantAddress as string,
           latitude: coords?.latitude ?? null,
           longitude: coords?.longitude ?? null,
-          halalStatuses: restaurantHalalStatuses as HalalStatus[],
+          halalStatuses: restaurantHalalStatuses as $Enums.HalalStatus[],
           certificateUrl: (restaurantCertificateUrl as string) || null,
           certificateExpiresAt: restaurantCertificateExpiresAt
             ? new Date(restaurantCertificateExpiresAt as string)

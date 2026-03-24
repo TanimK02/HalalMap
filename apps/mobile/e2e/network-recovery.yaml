@@ -1,0 +1,11 @@
+appId: com.tanimkhan.halalmap
+---
+- launchApp
+- assertVisible: "Login"
+- tapOn: "Email"
+- inputText: "customer@example.com"
+- tapOn: "Password"
+- inputText: "password123"
+- tapOn: "Sign in"
+- assertVisible: "Halal Map"
+- assertVisible: "Pull to refresh"

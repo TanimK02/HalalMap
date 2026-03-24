@@ -15,7 +15,14 @@
     "db:push": "pnpm --filter api exec prisma db push",
     "db:seed": "pnpm --filter api exec prisma db seed",
     "db:studio": "pnpm --filter api exec prisma studio",
-    "test:api": "pnpm --filter api test:run"
+    "test:api": "pnpm --filter api test:run",
+    "test:api:integration": "pnpm --filter api test:integration",
+    "test:mobile": "pnpm --filter mobile test:run",
+    "test:mobile:e2e": "pnpm --filter mobile test:e2e",
+    "test:admin": "pnpm --filter admin test:run",
+    "test:restaurant": "pnpm --filter restaurant-dashboard test:run",
+    "test:shared": "pnpm --filter @halal-map/shared test:run",
+    "test": "pnpm -r test:run"
   },
   "packageManager": "pnpm@9.14.2",
   "engines": {

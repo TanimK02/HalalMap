@@ -42,6 +42,9 @@ beforeEach(() => {
     }
     throw new Error('invalid');
   });
+  (prisma.user.findUnique as jest.Mock).mockImplementation(({ where: { id } }: { where: { id: string } }) =>
+    Promise.resolve(id === 'user-123' ? { id: 'user-123' } : null)
+  );
 });
 
 describe('GET /users/profile', () => {
@@ -52,7 +55,10 @@ describe('GET /users/profile', () => {
   });
 
   it('returns 404 when user not found', async () => {
-    (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+    (prisma.user.findUnique as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce({ id: 'user-123' })
+      .mockResolvedValueOnce(null);
 
     const res = await request(app).get('/users/profile').set(auth());
 
@@ -61,13 +67,17 @@ describe('GET /users/profile', () => {
   });
 
   it('returns 200 with user when token valid', async () => {
-    (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+    const userRow = {
       id: 'user-123',
       name: 'Me',
       email: 'u@example.com',
       role: 'CUSTOMER',
       createdAt: new Date(),
-    });
+    };
+    (prisma.user.findUnique as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce({ id: 'user-123' })
+      .mockResolvedValueOnce(userRow);
 
     const res = await request(app).get('/users/profile').set(auth());
 

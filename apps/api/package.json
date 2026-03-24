@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "test": "jest",
     "test:run": "jest --ci",
+    "test:integration": "jest --ci --config jest.integration.config.cjs",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",

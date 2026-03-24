@@ -3,6 +3,9 @@ import { app } from '../app.js';
 
 jest.mock('../lib/prisma.js', () => ({
   prisma: {
+    user: {
+      findUnique: jest.fn(),
+    },
     $transaction: jest.fn(),
     restaurant: {
       findMany: jest.fn(),
@@ -70,6 +73,9 @@ beforeEach(() => {
     }
     throw new Error('invalid');
   });
+  (prisma.user.findUnique as jest.Mock).mockImplementation(({ where: { id } }: { where: { id: string } }) =>
+    Promise.resolve(id === 'user-123' || id === 'owner-1' ? { id } : null)
+  );
 });
 
 describe('GET /restaurants/', () => {
