@@ -129,6 +129,57 @@ describe('GET /admin/restaurants/:id', () => {
   });
 });
 
+describe('PATCH /admin/restaurants/:id (fee overrides)', () => {
+  it('returns 400 when no fee fields in body', async () => {
+    const res = await request(app).patch('/admin/restaurants/r1').set(auth()).send({});
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 404 when restaurant not found', async () => {
+    (prisma.restaurant.findUnique as jest.Mock).mockResolvedValue(null);
+
+    const res = await request(app)
+      .patch('/admin/restaurants/missing')
+      .set(auth())
+      .send({ pickupFeeType: null, pickupFeeValue: null });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 200 and updates fee overrides', async () => {
+    const fullRestaurant = {
+      id: 'r1',
+      name: 'R1',
+      hasPendingTagChanges: false,
+      pickupFeeType: 'FLAT',
+      pickupFeeValue: 299,
+      deliveryFeeType: null,
+      deliveryFeeValue: null,
+      owner: { id: 'o1', name: 'O', email: 'o@x.com' },
+      menuCategories: [],
+      publishedTags: [],
+      tagDrafts: [],
+    };
+    (prisma.restaurant.findUnique as jest.Mock)
+      .mockResolvedValueOnce({ id: 'r1' })
+      .mockResolvedValueOnce(fullRestaurant);
+    (prisma.restaurant.update as jest.Mock).mockResolvedValue({});
+
+    const res = await request(app)
+      .patch('/admin/restaurants/r1')
+      .set(auth())
+      .send({ pickupFeeType: 'FLAT', pickupFeeValue: 299 });
+
+    expect(res.status).toBe(200);
+    expect(prisma.restaurant.update).toHaveBeenCalledWith({
+      where: { id: 'r1' },
+      data: { pickupFeeType: 'FLAT', pickupFeeValue: 299 },
+    });
+    expect(res.body).toMatchObject({ id: 'r1', pickupFeeType: 'FLAT', pickupFeeValue: 299 });
+  });
+});
+
 describe('GET /admin/tags', () => {
   it('returns 200 with tags', async () => {
     (prisma.tag.findMany as jest.Mock).mockResolvedValue([

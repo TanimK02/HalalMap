@@ -170,6 +170,98 @@ adminRouter.get('/restaurants/:id', param('id').isString(), async (req: Request,
   });
 });
 
+// Admin: set pickup/delivery fee overrides (restaurant owners cannot change these via PATCH /me/restaurant)
+adminRouter.patch(
+  '/restaurants/:id',
+  param('id').isString(),
+  [
+    body('pickupFeeType').optional({ values: 'null' }).isIn(['FLAT', 'PERCENT']),
+    body('pickupFeeValue').optional({ values: 'null' }).isInt({ min: 0 }),
+    body('deliveryFeeType').optional({ values: 'null' }).isIn(['FLAT', 'PERCENT']),
+    body('deliveryFeeValue').optional({ values: 'null' }).isInt({ min: 0 }),
+  ],
+  async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const feeKeys = ['pickupFeeType', 'pickupFeeValue', 'deliveryFeeType', 'deliveryFeeValue'] as const;
+    if (!feeKeys.some((k) => Object.prototype.hasOwnProperty.call(req.body, k))) {
+      return res.status(400).json({
+        error: 'Provide at least one of: pickupFeeType, pickupFeeValue, deliveryFeeType, deliveryFeeValue',
+      });
+    }
+
+    const data = req.body as {
+      pickupFeeType?: string | null;
+      pickupFeeValue?: number | null;
+      deliveryFeeType?: string | null;
+      deliveryFeeValue?: number | null;
+    };
+    if (
+      (data.pickupFeeType != null && data.pickupFeeValue == null) ||
+      (data.pickupFeeType == null && data.pickupFeeValue != null)
+    ) {
+      return res.status(400).json({
+        error: 'pickupFeeType and pickupFeeValue must both be set or both be null',
+      });
+    }
+    if (
+      (data.deliveryFeeType != null && data.deliveryFeeValue == null) ||
+      (data.deliveryFeeType == null && data.deliveryFeeValue != null)
+    ) {
+      return res.status(400).json({
+        error: 'deliveryFeeType and deliveryFeeValue must both be set or both be null',
+      });
+    }
+
+    const restaurantId = req.params.id as string;
+    const existing = await prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { id: true } });
+    if (!existing) return res.status(404).json({ error: 'Restaurant not found' });
+
+    try {
+      await prisma.restaurant.update({
+        where: { id: restaurantId },
+        data: {
+          ...(data.pickupFeeType !== undefined && { pickupFeeType: data.pickupFeeType }),
+          ...(data.pickupFeeValue !== undefined && { pickupFeeValue: data.pickupFeeValue }),
+          ...(data.deliveryFeeType !== undefined && { deliveryFeeType: data.deliveryFeeType }),
+          ...(data.deliveryFeeValue !== undefined && { deliveryFeeValue: data.deliveryFeeValue }),
+        },
+      });
+    } catch {
+      return res.status(404).json({ error: 'Restaurant not found' });
+    }
+
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: restaurantId },
+      include: {
+        owner: { select: { id: true, name: true, email: true } },
+        menuCategories: { include: { items: true } },
+        publishedTags: {
+          include: { tag: { select: { ...tagPublicSelect, active: true } } },
+        },
+        tagDrafts: {
+          include: { tag: { select: { ...tagPublicSelect, active: true } } },
+        },
+      },
+    });
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+    const { publishedTags: pubRows, tagDrafts: draftRows, ...rest } = restaurant;
+    const publishedTags = mapJoinToTagsWithActive(pubRows.map((p) => ({ tag: p.tag as TagWithActive })));
+    const draftTags = resolveDraftTagsAdmin(
+      restaurant.hasPendingTagChanges,
+      publishedTags,
+      draftRows.map((d) => ({ tag: d.tag as TagWithActive }))
+    );
+    return res.json({
+      ...rest,
+      publishedTags,
+      draftTags,
+      hasPendingTagChanges: restaurant.hasPendingTagChanges,
+    });
+  }
+);
+
 adminRouter.get('/tags', async (_req: Request, res: Response) => {
   const tags = await prisma.tag.findMany({
     orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],

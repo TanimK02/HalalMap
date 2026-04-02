@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View, Linking } from 'react-native';
+import { View, Linking, ActivityIndicator, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -27,6 +27,15 @@ import { brand } from './src/theme';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
+
+const styles = StyleSheet.create({
+  bootSplash: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: brand.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
 
 function MainTabs() {
   const { items } = useCart();
@@ -101,7 +110,13 @@ function MainTabs() {
 function AppNavigator() {
   const { token, user, loading } = useAuth();
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <View style={styles.bootSplash} accessibilityLabel="Loading">
+        <ActivityIndicator size="large" color={brand.primary} />
+      </View>
+    );
+  }
 
   const NavContainer = NavigationContainer as React.ComponentType<any>;
   const StackNav = Stack.Navigator as React.ComponentType<any>;

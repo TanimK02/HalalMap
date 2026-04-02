@@ -1,10 +1,11 @@
-import axios from 'axios';
+import axios, { type AxiosError } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const baseURL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4000';
 
 export const api = axios.create({
   baseURL,
+  timeout: 15_000,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -12,7 +13,17 @@ const TOKEN_KEY = 'halal_map_token';
 let onAuthInvalid: (() => void) | null = null;
 let isHandlingAuthInvalid = false;
 
+/** Matches /auth/login, auth/login, and absolute URLs — axios keeps a leading slash on relative paths. */
+function isPublicAuthRequestUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  return url.includes('auth/login') || url.includes('auth/register');
+}
+
 api.interceptors.request.use(async (config) => {
+  if (isPublicAuthRequestUrl(config.url)) {
+    delete config.headers.Authorization;
+    return config;
+  }
   try {
     const token = await AsyncStorage.getItem(TOKEN_KEY);
     if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -36,9 +47,7 @@ api.interceptors.response.use(
   async (error) => {
     const status = error?.response?.status;
     const url = error?.config?.url as string | undefined;
-    const isAuthLoginRequest = typeof url === 'string' && url.includes('/auth/login');
-    const isAuthRegisterRequest = typeof url === 'string' && url.includes('/auth/register');
-    const shouldSkipGlobalLogout = isAuthLoginRequest || isAuthRegisterRequest;
+    const shouldSkipGlobalLogout = isPublicAuthRequestUrl(url);
     const isAuthMeNotFound = status === 404 && typeof url === 'string' && url.includes('/auth/me');
     if (!shouldSkipGlobalLogout && (status === 401 || isAuthMeNotFound)) {
       await handleAuthInvalid();
@@ -58,6 +67,27 @@ export async function getStoredToken() {
 
 export function setAuthInvalidHandler(handler: (() => void) | null) {
   onAuthInvalid = handler;
+}
+
+export function formatApiFormError(err: unknown, fallback: string, opts?: { skipUnauthorizedHint?: boolean }): string {
+  if (axios.isAxiosError(err)) {
+    const ax = err as AxiosError<{ error?: string; message?: string; errors?: Array<{ msg?: string }> }>;
+    if (ax.code === 'ECONNABORTED' || /timeout/i.test(String(ax.message))) {
+      return 'Could not reach the server. Check your network and EXPO_PUBLIC_API_URL (use your computer’s LAN IP on a physical device, not localhost).';
+    }
+    const data = ax.response?.data;
+    if (data && typeof data === 'object') {
+      if (data.error != null) return String(data.error);
+      const first = data.errors?.[0]?.msg;
+      if (first) return String(first);
+      if (data.message != null) return String(data.message);
+    }
+    if (!opts?.skipUnauthorizedHint && ax.response?.status === 401) {
+      return 'Invalid email or password';
+    }
+  }
+  if (err instanceof Error) return err.message;
+  return fallback;
 }
 
 // Favorites (require auth)

@@ -11,8 +11,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { formatApiFormError } from '../api';
 import { brand } from '../theme';
 
 export default function Register() {
@@ -38,10 +38,7 @@ export default function Register() {
     try {
       await register(name.trim(), email.trim(), password);
     } catch (err: unknown) {
-      const msg =
-        (axios.isAxiosError(err) && err.response?.data?.error) ||
-        (err instanceof Error ? err.message : 'Registration failed');
-      setError(String(msg));
+      setError(formatApiFormError(err, 'Registration failed', { skipUnauthorizedHint: true }));
     } finally {
       setLoading(false);
     }
