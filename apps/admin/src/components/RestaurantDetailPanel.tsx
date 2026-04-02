@@ -50,6 +50,10 @@ export type RestaurantDetail = {
   approved: boolean;
   offersPickup: boolean;
   offersDelivery: boolean;
+  pickupFeeType?: string | null;
+  pickupFeeValue?: number | null;
+  deliveryFeeType?: string | null;
+  deliveryFeeValue?: number | null;
   hasPendingTagChanges?: boolean;
   owner: { id: string; name: string; email: string };
   menuCategories?: MenuCategory[];
@@ -82,6 +86,12 @@ export default function RestaurantDetailPanel({
   const [publishedEditorIds, setPublishedEditorIds] = useState<string[]>([]);
   const [tagActionMessage, setTagActionMessage] = useState('');
   const [tagBusy, setTagBusy] = useState(false);
+  const [pickupFeeType, setPickupFeeType] = useState<'' | 'FLAT' | 'PERCENT'>('');
+  const [pickupFeeValue, setPickupFeeValue] = useState(0);
+  const [deliveryFeeType, setDeliveryFeeType] = useState<'' | 'FLAT' | 'PERCENT'>('');
+  const [deliveryFeeValue, setDeliveryFeeValue] = useState(0);
+  const [feeMessage, setFeeMessage] = useState('');
+  const [feeBusy, setFeeBusy] = useState(false);
 
   useEffect(() => {
     if (!restaurantId) {
@@ -99,6 +109,11 @@ export default function RestaurantDetailPanel({
           setDetail(d);
           setPublishedEditorIds((d.publishedTags ?? []).filter((t) => t.active).map((t) => t.id));
           setTagActionMessage('');
+          setPickupFeeType((d.pickupFeeType as 'FLAT' | 'PERCENT') ?? '');
+          setPickupFeeValue(d.pickupFeeValue ?? 0);
+          setDeliveryFeeType((d.deliveryFeeType as 'FLAT' | 'PERCENT') ?? '');
+          setDeliveryFeeValue(d.deliveryFeeValue ?? 0);
+          setFeeMessage('');
           onDetailUpdated?.(d);
         }
       })
@@ -204,6 +219,33 @@ export default function RestaurantDetailPanel({
       );
     } finally {
       setTagBusy(false);
+    }
+  }
+
+  async function handleSaveFeeOverrides() {
+    if (!detail) return;
+    setFeeBusy(true);
+    setFeeMessage('');
+    try {
+      const { data } = await api.patch<RestaurantDetail>(`/admin/restaurants/${detail.id}`, {
+        pickupFeeType: pickupFeeType || null,
+        pickupFeeValue: pickupFeeType ? pickupFeeValue : null,
+        deliveryFeeType: deliveryFeeType || null,
+        deliveryFeeValue: deliveryFeeType ? deliveryFeeValue : null,
+      });
+      setDetail(data);
+      setPickupFeeType((data.pickupFeeType as 'FLAT' | 'PERCENT') ?? '');
+      setPickupFeeValue(data.pickupFeeValue ?? 0);
+      setDeliveryFeeType((data.deliveryFeeType as 'FLAT' | 'PERCENT') ?? '');
+      setDeliveryFeeValue(data.deliveryFeeValue ?? 0);
+      onDetailUpdated?.(data);
+      setFeeMessage('Fee overrides saved.');
+    } catch (err) {
+      setFeeMessage(
+        axios.isAxiosError(err) && err.response?.data?.error ? err.response.data.error : 'Failed to save fees'
+      );
+    } finally {
+      setFeeBusy(false);
     }
   }
 
@@ -332,6 +374,71 @@ export default function RestaurantDetailPanel({
                 <span className="font-medium text-text-primary">Delivery:</span>{' '}
                 {enableDelivery ? (detail.offersDelivery ? 'Yes' : 'No') : 'No (disabled app-wide)'}
               </p>
+              <div className="rounded border border-gray-200 bg-gray-50 p-3 space-y-3">
+                <p className="text-sm font-medium text-text-primary">Pickup / delivery service fees</p>
+                <p className="text-xs text-text-secondary">
+                  Overrides platform defaults for this restaurant. Flat amounts are in cents (e.g. 299 = $2.99).
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-text-primary">Pickup fee</label>
+                    <select
+                      value={pickupFeeType}
+                      onChange={(e) => setPickupFeeType(e.target.value as '' | 'FLAT' | 'PERCENT')}
+                      disabled={feeBusy}
+                      className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                    >
+                      <option value="">Platform default</option>
+                      <option value="FLAT">Flat (cents)</option>
+                      <option value="PERCENT">Percent</option>
+                    </select>
+                    {(pickupFeeType === 'FLAT' || pickupFeeType === 'PERCENT') && (
+                      <input
+                        type="number"
+                        min={0}
+                        value={pickupFeeValue}
+                        onChange={(e) => setPickupFeeValue(Number(e.target.value) || 0)}
+                        disabled={feeBusy}
+                        className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                      />
+                    )}
+                  </div>
+                  {enableDelivery && (
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-text-primary">Delivery fee</label>
+                      <select
+                        value={deliveryFeeType}
+                        onChange={(e) => setDeliveryFeeType(e.target.value as '' | 'FLAT' | 'PERCENT')}
+                        disabled={feeBusy}
+                        className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                      >
+                        <option value="">Platform default</option>
+                        <option value="FLAT">Flat (cents)</option>
+                        <option value="PERCENT">Percent</option>
+                      </select>
+                      {(deliveryFeeType === 'FLAT' || deliveryFeeType === 'PERCENT') && (
+                        <input
+                          type="number"
+                          min={0}
+                          value={deliveryFeeValue}
+                          onChange={(e) => setDeliveryFeeValue(Number(e.target.value) || 0)}
+                          disabled={feeBusy}
+                          className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  disabled={feeBusy}
+                  onClick={() => void handleSaveFeeOverrides()}
+                  className="rounded bg-primary px-2 py-1 text-xs text-white hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {feeBusy ? 'Saving…' : 'Save fee overrides'}
+                </button>
+                {feeMessage && <p className="text-xs text-text-secondary">{feeMessage}</p>}
+              </div>
               <div>
                 <p className="mb-1 text-sm font-medium text-text-primary">Owner</p>
                 <p className="text-sm text-text-secondary">

@@ -47,28 +47,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    getStoredToken().then((t) => {
-      if (!t) {
-        setLoading(false);
-        return;
-      }
-      setToken(t);
-      api
-        .get('/auth/me')
-        .then((r) => setUser(r.data))
-        .catch((error) => {
-          const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-          // Only clear local auth state here for auth-invalid responses.
-          // Other failures (e.g. transient network issues) should not force logout.
-          if (status === 401 || status === 404) {
-            setUser(null);
-            setToken(null);
-            void setStoredToken(null);
-          }
-        })
-        .finally(() => setLoading(false));
-
-    });
+    getStoredToken()
+      .catch(() => null)
+      .then((t) => {
+        if (!t) {
+          setLoading(false);
+          return;
+        }
+        setToken(t);
+        api
+          .get('/auth/me')
+          .then((r) => setUser(r.data))
+          .catch((error) => {
+            const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+            // Only clear local auth state here for auth-invalid responses.
+            // Other failures (e.g. transient network issues) should not force logout.
+            if (status === 401 || status === 404) {
+              setUser(null);
+              setToken(null);
+              void setStoredToken(null);
+            }
+          })
+          .finally(() => setLoading(false));
+      });
   }, []);
 
   return (

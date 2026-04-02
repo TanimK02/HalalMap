@@ -10,8 +10,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { formatApiFormError } from '../api';
 import { brand } from '../theme';
 
 export default function Login() {
@@ -32,10 +32,7 @@ export default function Login() {
     try {
       await login(email.trim(), password);
     } catch (err: unknown) {
-      const msg =
-        (axios.isAxiosError(err) && err.response?.data?.error) ||
-        (err instanceof Error ? err.message : 'Login failed');
-      setError(String(msg));
+      setError(formatApiFormError(err, 'Login failed'));
     } finally {
       setLoading(false);
     }

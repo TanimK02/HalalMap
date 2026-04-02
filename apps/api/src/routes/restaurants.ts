@@ -361,10 +361,6 @@ restaurantsRouter.patch(
     body('businessHours').optional().isObject(),
     body('offersPickup').optional().isBoolean(),
     body('offersDelivery').optional().isBoolean(),
-    body('pickupFeeType').optional().isIn(['FLAT', 'PERCENT']),
-    body('pickupFeeValue').optional().isInt({ min: 0 }),
-    body('deliveryFeeType').optional().isIn(['FLAT', 'PERCENT']),
-    body('deliveryFeeValue').optional().isInt({ min: 0 }),
   ],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
@@ -375,26 +371,10 @@ restaurantsRouter.patch(
     });
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
 
-    const data = req.body as {
-      pickupFeeType?: string | null;
-      pickupFeeValue?: number | null;
-      deliveryFeeType?: string | null;
-      deliveryFeeValue?: number | null;
-    };
-    if (
-      (data.pickupFeeType != null && data.pickupFeeValue == null) ||
-      (data.pickupFeeType == null && data.pickupFeeValue != null)
-    ) {
-      return res.status(400).json({
-        error: 'pickupFeeType and pickupFeeValue must both be set or both be null',
-      });
-    }
-    if (
-      (data.deliveryFeeType != null && data.deliveryFeeValue == null) ||
-      (data.deliveryFeeType == null && data.deliveryFeeValue != null)
-    ) {
-      return res.status(400).json({
-        error: 'deliveryFeeType and deliveryFeeValue must both be set or both be null',
+    const feeBodyKeys = ['pickupFeeType', 'pickupFeeValue', 'deliveryFeeType', 'deliveryFeeValue'] as const;
+    if (feeBodyKeys.some((k) => Object.prototype.hasOwnProperty.call(req.body, k))) {
+      return res.status(403).json({
+        error: 'Pickup and delivery fee settings can only be changed by an administrator.',
       });
     }
 
@@ -423,10 +403,6 @@ restaurantsRouter.patch(
         ...(req.body.businessHours !== undefined && { businessHours: req.body.businessHours }),
         ...(req.body.offersPickup !== undefined && { offersPickup: req.body.offersPickup }),
         ...(req.body.offersDelivery !== undefined && { offersDelivery: req.body.offersDelivery }),
-        ...(data.pickupFeeType !== undefined && { pickupFeeType: data.pickupFeeType || null }),
-        ...(data.pickupFeeValue !== undefined && { pickupFeeValue: data.pickupFeeValue ?? null }),
-        ...(data.deliveryFeeType !== undefined && { deliveryFeeType: data.deliveryFeeType || null }),
-        ...(data.deliveryFeeValue !== undefined && { deliveryFeeValue: data.deliveryFeeValue ?? null }),
       },
     });
     return res.json(updated);

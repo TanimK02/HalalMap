@@ -261,6 +261,22 @@ describe('PATCH /restaurants/me/restaurant', () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ id: 'r1', name: 'Updated Name' });
   });
+
+  it('returns 403 when body includes pickup or delivery fee fields', async () => {
+    (prisma.restaurant.findUnique as jest.Mock).mockResolvedValue({
+      id: 'r1',
+      ownerId: 'owner-1',
+    });
+
+    const res = await request(app)
+      .patch('/restaurants/me/restaurant')
+      .set(auth(ownerToken))
+      .send({ name: 'OK', pickupFeeType: 'FLAT', pickupFeeValue: 100 });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/administrator/i);
+    expect(prisma.restaurant.update).not.toHaveBeenCalled();
+  });
 });
 
 describe('GET /restaurants/me/restaurant/categories', () => {

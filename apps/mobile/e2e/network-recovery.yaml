@@ -1,4 +1,4 @@
-appId: com.tanimkhan.halalmap
+appId: com.halalmap.app
 ---
 - launchApp
 - assertVisible: "Login"
