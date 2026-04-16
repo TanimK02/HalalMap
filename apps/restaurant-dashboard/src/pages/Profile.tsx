@@ -86,30 +86,52 @@ export default function Profile() {
   }, []);
 
   useEffect(() => {
-    api
-      .get<Restaurant>('/restaurants/me/restaurant')
-      .then((r) => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await api.get<Restaurant>('/restaurants/me/restaurant');
         const r2 = r.data;
-        setRestaurant(r2);
-        setSelectedTagIds((r2.draftTags ?? r2.publishedTags ?? []).map((t) => t.id));
+
+        // Best-effort: ensure Connect status is up-to-date (especially in local dev without webhooks).
+        if (stripeConnectEnabled) {
+          try {
+            await api.post('/restaurants/me/stripe/connect');
+          } catch {
+            // Ignore; we'll still render the profile page.
+          }
+        }
+
+        const r3 = stripeConnectEnabled
+          ? (await api.get<Restaurant>('/restaurants/me/restaurant')).data
+          : r2;
+
+        if (cancelled) return;
+        setRestaurant(r3);
+        setSelectedTagIds((r3.draftTags ?? r3.publishedTags ?? []).map((t) => t.id));
         setForm({
-          name: r2.name,
-          description: r2.description ?? '',
-          phone: r2.phone ?? '',
-          address: r2.address,
-          halalStatuses: Array.isArray(r2.halalStatuses) && r2.halalStatuses.length > 0 ? r2.halalStatuses : ['CERTIFIED_HALAL'],
-          certificateUrl: r2.certificateUrl ?? '',
-          certificateExpiresAt: r2.certificateExpiresAt
-            ? new Date(r2.certificateExpiresAt).toISOString().slice(0, 10)
+          name: r3.name,
+          description: r3.description ?? '',
+          phone: r3.phone ?? '',
+          address: r3.address,
+          halalStatuses: Array.isArray(r3.halalStatuses) && r3.halalStatuses.length > 0 ? r3.halalStatuses : ['CERTIFIED_HALAL'],
+          certificateUrl: r3.certificateUrl ?? '',
+          certificateExpiresAt: r3.certificateExpiresAt
+            ? new Date(r3.certificateExpiresAt).toISOString().slice(0, 10)
             : '',
-          offersPickup: r2.offersPickup,
-          offersDelivery: r2.offersDelivery,
-          businessHours: parseBusinessHoursForForm(r2.businessHours),
+          offersPickup: r3.offersPickup,
+          offersDelivery: r3.offersDelivery,
+          businessHours: parseBusinessHoursForForm(r3.businessHours),
         });
-      })
-      .catch(() => setRestaurant(null))
-      .finally(() => setLoading(false));
-  }, []);
+      } catch {
+        if (!cancelled) setRestaurant(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [stripeConnectEnabled]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

@@ -157,7 +157,6 @@ ordersRouter.post(
           transfer_data: {
             destination: restaurant.stripeConnectAccountId!,
           },
-          on_behalf_of: restaurant.stripeConnectAccountId!,
         }),
       });
 

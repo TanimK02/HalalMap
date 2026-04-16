@@ -10,6 +10,7 @@ import { requireAuth, requireRole, AuthRequest } from '../middleware/auth.js';
 import { isS3Configured, getPresignedUploadUrl } from '../lib/s3.js';
 import type { $Enums } from '@prisma/client';
 import type { HalalStatus } from '@halal-map/shared';
+import { Prisma } from '@prisma/client';
 import {
   getPublishedTagIds,
   mapPublishedToPublicTags,
@@ -28,6 +29,17 @@ const stripe =
   process.env.STRIPE_SECRET_KEY && isStripeConnectEnabled()
     ? new Stripe(process.env.STRIPE_SECRET_KEY)
     : null;
+
+function mapStripeAccountToConnectStatus(account: Stripe.Account): 'ONBOARDING' | 'ACTIVE' | 'RESTRICTED' | 'DISABLED' {
+  const chargesEnabled = !!account.charges_enabled;
+  const payoutsEnabled = !!account.payouts_enabled;
+  const disabledReason = account.requirements?.disabled_reason;
+
+  if (disabledReason) return 'DISABLED';
+  if (chargesEnabled && payoutsEnabled) return 'ACTIVE';
+  if (account.requirements?.currently_due?.length || account.requirements?.past_due?.length) return 'RESTRICTED';
+  return 'ONBOARDING';
+}
 
 // Public: list approved restaurants (with optional filters and optional location sort)
 restaurantsRouter.get(
@@ -286,10 +298,31 @@ restaurantsRouter.post(
       });
     }
 
-    return res.json({
-      stripeConnectAccountId: accountId,
-      stripeConnectStatus: restaurant.stripeConnectStatus,
-    });
+    // Best-effort sync in case webhooks aren't running (common in local dev).
+    try {
+      const account = await stripe.accounts.retrieve(accountId);
+      const status = mapStripeAccountToConnectStatus(account);
+      const updated = await prisma.restaurant.update({
+        where: { id: restaurant.id },
+        data: {
+          stripeConnectStatus: status,
+          stripeConnectRequirements:
+            account.requirements == null
+              ? Prisma.JsonNull
+              : (JSON.parse(JSON.stringify(account.requirements)) as Prisma.InputJsonValue),
+          stripeConnectLastSyncedAt: new Date(),
+        },
+      });
+      return res.json({
+        stripeConnectAccountId: updated.stripeConnectAccountId,
+        stripeConnectStatus: updated.stripeConnectStatus,
+      });
+    } catch {
+      return res.json({
+        stripeConnectAccountId: accountId,
+        stripeConnectStatus: restaurant.stripeConnectStatus,
+      });
+    }
   }
 );
 
