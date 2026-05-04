@@ -18,6 +18,9 @@ function formatPriceInput(value: string): string {
   return s;
 }
 
+/** Add-item form draft; `price` is the raw input string until submit. */
+type NewMenuItemDraft = Partial<Omit<MenuItem, 'price'>> & { categoryId?: string; price?: string };
+
 export default function Menu() {
   const { enableDelivery } = useConfig();
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
@@ -25,7 +28,7 @@ export default function Menu() {
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [newItem, setNewItem] = useState<Partial<MenuItem> & { categoryId?: string }>({});
+  const [newItem, setNewItem] = useState<NewMenuItemDraft>({});
   const [editItemForm, setEditItemForm] = useState<{ name: string; description: string; price: string; imageUrl: string }>({ name: '', description: '', price: '', imageUrl: '' });
   const [reordering, setReordering] = useState(false);
   const [uploadingImage, setUploadingImage] = useState<'add' | 'edit' | null>(null);
