@@ -38,7 +38,7 @@ export default function Moderation() {
     load();
   }, [filter]);
 
-  function onApproved(id: string, approved: boolean) {
+  function onApproved(_id: string, approved: boolean) {
     setMessage(approved ? 'Restaurant approved.' : 'Restaurant rejected.');
     load();
   }
