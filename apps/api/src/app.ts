@@ -24,11 +24,27 @@ const allowedOrigins = [
   'http://127.0.0.1:5174',
 ].filter(Boolean);
 
+function isAllowedHostedOrigin(origin: string): boolean {
+  // Portfolio-friendly defaults for hosted frontends.
+  // Keep explicit env-based allowlist as the main control, but allow common preview domains.
+  return (
+    origin.endsWith('.vercel.app') ||
+    origin.endsWith('.netlify.app') ||
+    origin.endsWith('.onrender.com')
+  );
+}
+
 app.use(
   cors({
     origin: (origin, cb) => {
       if (!origin) return cb(null, true);
-      if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) return cb(null, true);
+      if (
+        allowedOrigins.length === 0 ||
+        allowedOrigins.includes(origin) ||
+        isAllowedHostedOrigin(origin)
+      ) {
+        return cb(null, true);
+      }
       cb(null, false);
     },
     credentials: true,

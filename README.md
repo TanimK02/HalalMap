@@ -2,6 +2,12 @@
 
 Halal food delivery marketplace: customer app (React Native), restaurant dashboard, admin panel, and shared Node/Express API.
 
+## Live demo (add your links)
+
+- **Restaurant dashboard**: <add link>
+- **Admin panel**: <add link>
+- **API health**: <add link to `/health`>
+
 ## Setup
 
 ### Prerequisites

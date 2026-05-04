@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { body, param, query, validationResult } from 'express-validator';
-import type { Prisma } from '@prisma/client';
+import type { Prisma as PrismaTypes } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { getEffectiveFeeStructure } from '../lib/fees.js';
 import { isDeliveryEnabled, isStripeConnectEnabled } from '../lib/config.js';
@@ -87,7 +87,7 @@ restaurantsRouter.get(
       filterTagIds = [...new Set(resolvedIds)];
     }
 
-    const whereParts: Prisma.RestaurantWhereInput[] = [{ approved: true }];
+    const whereParts: PrismaTypes.RestaurantWhereInput[] = [{ approved: true }];
     if (halalStatusesParam.length > 0) {
       whereParts.push({
         halalStatuses: { hasEvery: halalStatusesParam as $Enums.HalalStatus[] },
@@ -120,7 +120,7 @@ restaurantsRouter.get(
     for (const tid of filterTagIds) {
       whereParts.push({ publishedTags: { some: { tagId: tid } } });
     }
-    const where: Prisma.RestaurantWhereInput =
+    const where: PrismaTypes.RestaurantWhereInput =
       whereParts.length === 1 ? whereParts[0]! : { AND: whereParts };
 
     const select = {
@@ -361,7 +361,7 @@ restaurantsRouter.post(
       });
     }
 
-    const origin = process.env.CLIENT_ORIGIN_RESTAURANT ?? 'http://localhost:5174';
+    const origin = process.env.CLIENT_ORIGIN_RESTAURANT ?? 'http://localhost:5173';
     const refreshUrl = `${origin}/profile?stripeOnboarding=interrupted`;
     const returnUrl = `${origin}/profile?stripeOnboarding=completed`;
 
