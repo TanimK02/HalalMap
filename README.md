@@ -8,7 +8,7 @@ Command cheat sheet: [START.md](START.md).
 
 - **Restaurant dashboard**: <add link>
 - **Admin panel**: <add link>
-- **API health**: <add link to `/health`>
+- **API (hosted):** https://halalmap.onrender.com — health check: https://halalmap.onrender.com/health
 
 ## Setup
 
@@ -33,8 +33,16 @@ From the **repository root**:
 
    Copy [apps/mobile/.env.example](apps/mobile/.env.example) to `apps/mobile/.env` and set `EXPO_PUBLIC_API_URL`:
 
-   - **iOS Simulator:** `http://127.0.0.1:4000` (matches the example file).
-   - **Physical device on the same Wi‑Fi:** `http://<your-computer-LAN-IP>:4000` (the API listens on `0.0.0.0:4000`; see [START.md](START.md)).
+   - **Hosted API (viewers, demos, or when you are not running the API locally):** set exactly:
+
+     ```
+     EXPO_PUBLIC_API_URL=https://halalmap.onrender.com
+     ```
+
+     Restart Metro after changing this file.
+
+   - **iOS Simulator with a local API:** `http://127.0.0.1:4000`.
+   - **Physical device on the same Wi‑Fi as your dev machine:** `http://<your-computer-LAN-IP>:4000` (the API listens on `0.0.0.0:4000`; see [START.md](START.md)).
    - Optional: `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` when you test payments (dev builds / EAS later).
 
 3. **Start Expo**
@@ -67,7 +75,7 @@ pnpm exec prisma db seed       # optional: seed admin + sample restaurant
 pnpm dev
 ```
 
-API runs at `http://localhost:4000`.
+API runs at `http://localhost:4000` when you develop locally. The hosted instance is **https://halalmap.onrender.com** (set `EXPO_PUBLIC_API_URL` there for the mobile app to use it).
 
 ### 3. Shared package
 
@@ -106,6 +114,27 @@ pnpm --filter admin dev
 ```
 
 Runs at `http://localhost:5174`.
+
+### Sharing the Expo app with viewers (live API data)
+
+The deployed API for this project is **`https://halalmap.onrender.com`**. Viewers should use **`EXPO_PUBLIC_API_URL=https://halalmap.onrender.com`** in `apps/mobile/.env` (see [apps/mobile/.env.example](apps/mobile/.env.example)), then restart Metro.
+
+Viewers install [Expo Go](https://expo.dev/go) and load **your** dev bundle; the app calls whatever URL is in `EXPO_PUBLIC_API_URL`, so that variable must point at the hosted API if they should see that data (not your laptop).
+
+1. In `apps/mobile/.env`, set `EXPO_PUBLIC_API_URL=https://halalmap.onrender.com` (no trailing slash).
+2. **Restart Expo** after editing `.env` (`pnpm dev:mobile` again).
+3. **Same Wi‑Fi as you:** LAN / default mode is enough; share the QR from the terminal.
+4. **Viewers anywhere (not on your network):** start with tunneling so the QR opens over the internet:
+
+   ```bash
+   pnpm dev:mobile:tunnel
+   ```
+
+   Tunnel mode may ask you to log in with an Expo account the first time. Viewers scan the QR in Expo Go; their phones call **Render** at `EXPO_PUBLIC_API_URL` for API data.
+
+Treat a tunnel + public API like a **public demo**: expect anyone with the QR while the server runs to reach your backend.
+
+If you run the API **locally** for development, switch `EXPO_PUBLIC_API_URL` back to `http://127.0.0.1:4000` or your LAN IP as needed.
 
 ## Monorepo layout
 

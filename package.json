@@ -8,6 +8,7 @@
     "dev:restaurant": "pnpm --filter restaurant-dashboard dev",
     "dev:admin": "pnpm --filter admin dev",
     "dev:mobile": "pnpm --filter mobile dev",
+    "dev:mobile:tunnel": "pnpm --filter mobile dev -- --tunnel",
     "build:api": "pnpm --filter api build",
     "build:restaurant": "pnpm --filter restaurant-dashboard build",
     "build:admin": "pnpm --filter admin build",

@@ -61,7 +61,7 @@ const IMG = {
   pizza:
     'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&q=80&auto=format&fit=crop',
   fish:
-    'https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800&q=80&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=800&q=80&auto=format&fit=crop',
 } as const;
 
 export function imageUrlForMenuItem(categoryName: string, itemName: string): string {

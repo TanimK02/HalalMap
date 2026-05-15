@@ -5,9 +5,11 @@ Run from **repo root** (`/halalMap`) unless noted. Use `pnpm` (or `npm run`).
 ## Mobile first (Expo)
 
 1. `pnpm install`
-2. `cp apps/mobile/.env.example apps/mobile/.env` — set `EXPO_PUBLIC_API_URL` (`http://127.0.0.1:4000` for iOS Simulator; `http://YOUR_LAN_IP:4000` for a physical device).
+2. `cp apps/mobile/.env.example apps/mobile/.env` — set `EXPO_PUBLIC_API_URL`. **Hosted API (viewers / demos):** `https://halalmap.onrender.com`. **Local API:** `http://127.0.0.1:4000` (simulator) or `http://YOUR_LAN_IP:4000` (device on same Wi‑Fi).
 3. `pnpm dev:mobile` — or `cd apps/mobile && pnpm exec expo start --clear` if you need a clean cache.
 4. Open via Expo Go (QR) or from `apps/mobile`: `pnpm ios` / `pnpm android` / `pnpm web`.
+
+**Viewers + hosted API:** in `apps/mobile/.env` use `EXPO_PUBLIC_API_URL=https://halalmap.onrender.com`, restart Metro, then from repo root run `pnpm dev:mobile:tunnel` and share the QR (Expo Go). See [README.md](README.md) (“Sharing the Expo app with viewers”).
 
 ---
 
@@ -16,12 +18,13 @@ Run from **repo root** (`/halalMap`) unless noted. Use `pnpm` (or `npm run`).
 | Command | What it does |
 |--------|----------------|
 | `pnpm dev` | Start Expo dev server |
+| `pnpm exec expo start --tunnel` | Tunnel URL for QR (viewers not on your LAN; may prompt Expo login) |
 | `pnpm exec expo start --clear` | Start Expo with cleared cache |
 | `pnpm android` | Start and open Android |
 | `pnpm ios` | Start and open iOS |
 | `pnpm web` | Start Expo for web |
 
-**Note:** Set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` (e.g. `http://YOUR_LAN_IP:4000`) when using a physical device.
+**Note:** Set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env`. Use `https://halalmap.onrender.com` for the deployed API; use `http://YOUR_LAN_IP:4000` for a local API on a physical device.
 
 ---
 
@@ -31,6 +34,7 @@ Run from **repo root** (`/halalMap`) unless noted. Use `pnpm` (or `npm run`).
 |--------|----------------|
 | `pnpm dev:api` | Start API dev server (Express on port 4000, bind 0.0.0.0) |
 | `pnpm dev:mobile` | Start Expo dev server (customer app) |
+| `pnpm dev:mobile:tunnel` | Same as `dev:mobile` but `--tunnel` (share QR with viewers off your LAN) |
 | `pnpm dev:restaurant` | Start restaurant dashboard (Vite) |
 | `pnpm dev:admin` | Start admin panel (Vite) |
 | `pnpm build:api` | Build API (TypeScript → `dist/`) |
