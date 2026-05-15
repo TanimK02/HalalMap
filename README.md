@@ -2,6 +2,8 @@
 
 Halal food delivery marketplace: customer app (React Native), restaurant dashboard, admin panel, and shared Node/Express API.
 
+Command cheat sheet: [START.md](START.md).
+
 ## Live demo (add your links)
 
 - **Restaurant dashboard**: <add link>
@@ -14,13 +16,45 @@ Halal food delivery marketplace: customer app (React Native), restaurant dashboa
 
 - Node.js 20+
 - pnpm 9+
-- PostgreSQL (local or hosted)
+- PostgreSQL (local or hosted) — required when you run the API
+- [Expo Go](https://expo.dev/go) on a physical phone (optional; simulators/emulators work without it)
 
-### 1. Install dependencies
+### 1. Quick start: Expo mobile app
 
-```bash
-pnpm install
-```
+From the **repository root**:
+
+1. **Install dependencies**
+
+   ```bash
+   pnpm install
+   ```
+
+2. **Environment**
+
+   Copy [apps/mobile/.env.example](apps/mobile/.env.example) to `apps/mobile/.env` and set `EXPO_PUBLIC_API_URL`:
+
+   - **iOS Simulator:** `http://127.0.0.1:4000` (matches the example file).
+   - **Physical device on the same Wi‑Fi:** `http://<your-computer-LAN-IP>:4000` (the API listens on `0.0.0.0:4000`; see [START.md](START.md)).
+   - Optional: `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` when you test payments (dev builds / EAS later).
+
+3. **Start Expo**
+
+   ```bash
+   pnpm dev:mobile
+   ```
+
+   If the bundler misbehaves, clear the cache:
+
+   ```bash
+   cd apps/mobile && pnpm exec expo start --clear
+   ```
+
+4. **Open the app**
+
+   - Scan the QR code with **Expo Go** (physical device), or
+   - From `apps/mobile`: `pnpm ios`, `pnpm android`, or `pnpm web`.
+
+**Backend:** Sign-in and most flows need the API. When you are ready, start it in another terminal (see **2. Backend (API)** below). For Stripe payments you will need a development build (EAS Build) later.
 
 ### 2. Backend (API)
 
@@ -72,24 +106,6 @@ pnpm --filter admin dev
 ```
 
 Runs at `http://localhost:5174`.
-
-### 6. Mobile app (Expo)
-
-Create `apps/mobile/.env` (optional; for physical device use your machine IP):
-
-```
-EXPO_PUBLIC_API_URL=http://localhost:4000
-```
-
-For a device on the same network, use `http://<your-ip>:4000`.
-
-Then:
-
-```bash
-pnpm --filter mobile dev
-```
-
-Scan QR code with Expo Go. For Stripe payments you will need a development build (EAS Build) later.
 
 ## Monorepo layout
 

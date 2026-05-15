@@ -2,6 +2,27 @@
 
 Run from **repo root** (`/halalMap`) unless noted. Use `pnpm` (or `npm run`).
 
+## Mobile first (Expo)
+
+1. `pnpm install`
+2. `cp apps/mobile/.env.example apps/mobile/.env` — set `EXPO_PUBLIC_API_URL` (`http://127.0.0.1:4000` for iOS Simulator; `http://YOUR_LAN_IP:4000` for a physical device).
+3. `pnpm dev:mobile` — or `cd apps/mobile && pnpm exec expo start --clear` if you need a clean cache.
+4. Open via Expo Go (QR) or from `apps/mobile`: `pnpm ios` / `pnpm android` / `pnpm web`.
+
+---
+
+## Mobile (`apps/mobile`)
+
+| Command | What it does |
+|--------|----------------|
+| `pnpm dev` | Start Expo dev server |
+| `pnpm exec expo start --clear` | Start Expo with cleared cache |
+| `pnpm android` | Start and open Android |
+| `pnpm ios` | Start and open iOS |
+| `pnpm web` | Start Expo for web |
+
+**Note:** Set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` (e.g. `http://YOUR_LAN_IP:4000`) when using a physical device.
+
 ---
 
 ## From root
@@ -9,6 +30,7 @@ Run from **repo root** (`/halalMap`) unless noted. Use `pnpm` (or `npm run`).
 | Command | What it does |
 |--------|----------------|
 | `pnpm dev:api` | Start API dev server (Express on port 4000, bind 0.0.0.0) |
+| `pnpm dev:mobile` | Start Expo dev server (customer app) |
 | `pnpm dev:restaurant` | Start restaurant dashboard (Vite) |
 | `pnpm dev:admin` | Start admin panel (Vite) |
 | `pnpm build:api` | Build API (TypeScript → `dist/`) |
@@ -36,20 +58,6 @@ Run from **repo root** (`/halalMap`) unless noted. Use `pnpm` (or `npm run`).
 | `pnpm db:studio` | Prisma Studio |
 
 **Note:** API listens on `0.0.0.0:4000` so your phone can use your machine’s LAN IP (e.g. `http://192.168.x.x:4000`).
-
----
-
-## Mobile (`apps/mobile`)
-
-| Command | What it does |
-|--------|----------------|
-| `pnpm dev` | Start Expo dev server |
-| `pnpm exec expo start --clear` | Start Expo with cleared cache |
-| `pnpm android` | Start and open Android |
-| `pnpm ios` | Start and open iOS |
-| `pnpm web` | Start Expo for web |
-
-**Note:** Set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env` (e.g. `http://YOUR_LAN_IP:4000`) when using a physical device.
 
 ---
 
@@ -86,12 +94,13 @@ Created by `pnpm db:seed` (run from root or from `apps/api`).
 
 ## Typical dev setup
 
-1. **Terminal 1 – API**  
+1. **Terminal 1 – Mobile**  
+   `pnpm dev:mobile`  
+   (or `cd apps/mobile && pnpm exec expo start --clear`)
+
+2. **Terminal 2 – API**  
    `pnpm dev:api`  
    (or `cd apps/api && pnpm dev`)
-
-2. **Terminal 2 – Mobile**  
-   `cd apps/mobile && pnpm exec expo start --clear`
 
 3. **Optional – Restaurant / Admin**  
    `pnpm dev:restaurant` and/or `pnpm dev:admin`
