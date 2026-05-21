@@ -15,13 +15,16 @@ export const app = express();
 
 const allowedOrigins = [
   process.env.CLIENT_ORIGIN_MOBILE,
+  process.env.CLIENT_ORIGIN_EXPO_WEB,
   process.env.CLIENT_ORIGIN_RESTAURANT,
   process.env.CLIENT_ORIGIN_ADMIN,
   'http://localhost:5173',
   'http://localhost:5174',
+  'http://localhost:8081',
   'http://localhost:19006',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
+  'http://127.0.0.1:8081',
 ].filter(Boolean);
 
 function isAllowedHostedOrigin(origin: string): boolean {

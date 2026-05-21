@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { View, Linking, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -8,7 +7,7 @@ import {
   BottomTabBar,
   type BottomTabBarProps,
 } from '@react-navigation/bottom-tabs';
-import { StripeProvider, useStripe } from '@stripe/stripe-react-native';
+import StripeAppWrapper from './src/stripe/StripeAppWrapper';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { CartProvider, useCart } from './src/context/CartContext';
 import { ConfigProvider } from './src/context/ConfigContext';
@@ -156,34 +155,19 @@ function AppNavigator() {
   );
 }
 
-const stripePublishableKey = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '';
-
-function StripeRedirectHandler({ children }: { children: React.ReactNode }) {
-  const { handleURLCallback } = useStripe();
-  useEffect(() => {
-    const sub = Linking.addEventListener('url', (event) => {
-      handleURLCallback(event.url);
-    });
-    return () => sub.remove();
-  }, [handleURLCallback]);
-  return <>{children}</>;
-}
-
 export default function App() {
   return (
-    <StripeProvider publishableKey={stripePublishableKey}>
-      <StripeRedirectHandler>
-        <AuthProvider>
-          <ConfigProvider>
-            <FavoritesProvider>
-              <CartProvider>
-                <StatusBar style="dark" />
-                <AppNavigator />
-              </CartProvider>
-            </FavoritesProvider>
-          </ConfigProvider>
-        </AuthProvider>
-      </StripeRedirectHandler>
-    </StripeProvider>
+    <StripeAppWrapper>
+      <AuthProvider>
+        <ConfigProvider>
+          <FavoritesProvider>
+            <CartProvider>
+              <StatusBar style="dark" />
+              <AppNavigator />
+            </CartProvider>
+          </FavoritesProvider>
+        </ConfigProvider>
+      </AuthProvider>
+    </StripeAppWrapper>
   );
 }

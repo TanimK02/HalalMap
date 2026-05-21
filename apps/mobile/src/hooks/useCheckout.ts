@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
-import { useStripe } from '@stripe/stripe-react-native';
+import { useStripe } from '../stripe/useStripe';
 import { Alert } from 'react-native';
 import { api } from '../api';
 import { useCart } from '../context/CartContext';

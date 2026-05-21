@@ -9,7 +9,7 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate }),
 }));
 
-jest.mock('@stripe/stripe-react-native', () => ({
+jest.mock('../stripe/useStripe', () => ({
   useStripe: () => ({
     initPaymentSheet: jest.fn(async () => ({ error: null })),
     presentPaymentSheet: jest.fn(async () => ({ error: null })),
