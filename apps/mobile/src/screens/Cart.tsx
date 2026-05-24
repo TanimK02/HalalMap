@@ -14,6 +14,7 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useConfig } from '../context/ConfigContext';
 import { useCheckout } from '../hooks/useCheckout';
+import { WebCheckoutPayment } from '../components/WebCheckoutPayment';
 import { brand } from '../theme';
 import { DeliveryAddressSection } from '../components/DeliveryAddressSection';
 import type { Address } from '../types/address';
@@ -34,10 +35,13 @@ export default function Cart() {
   const [showAddAddressForm, setShowAddAddressForm] = useState(false);
   const [showAddressList, setShowAddressList] = useState(false);
 
-  const { handleCheckout, loading: checkoutLoading } = useCheckout(
-    deliveryType,
-    deliveryAddressId
-  );
+  const {
+    handleCheckout,
+    loading: checkoutLoading,
+    pendingPayment,
+    onPaymentSuccess,
+    onPaymentCancel,
+  } = useCheckout(deliveryType, deliveryAddressId);
 
   const subtotal = total;
   const subtotalCents = Math.round(subtotal * 100);
@@ -239,6 +243,11 @@ export default function Cart() {
           <Text style={styles.checkoutBtnText}>Checkout</Text>
         )}
       </TouchableOpacity>
+      <WebCheckoutPayment
+        pending={pendingPayment}
+        onSuccess={onPaymentSuccess}
+        onCancel={onPaymentCancel}
+      />
     </ScrollView>
   );
 }

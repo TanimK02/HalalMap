@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-/** Web preview: Stripe React Native is native-only; checkout shows an alert via useStripe web stub. */
+/** Web checkout uses Stripe.js Payment Element via WebCheckoutPayment. */
 export default function StripeAppWrapper({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }

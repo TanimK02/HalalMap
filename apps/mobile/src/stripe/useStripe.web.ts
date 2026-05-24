@@ -1,4 +1,4 @@
-/** No-op Stripe hooks for Expo web preview (payments require iOS/Android). */
+/** Legacy stub — web checkout uses Stripe.js via WebCheckoutPayment instead. */
 export function useStripe() {
   return {
     initPaymentSheet: async () => ({

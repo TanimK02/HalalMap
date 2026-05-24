@@ -6,6 +6,7 @@ import { Alert } from 'react-native';
 import { api } from '../api';
 import { useCart } from '../context/CartContext';
 import { useConfig } from '../context/ConfigContext';
+import { finalizeOrderFromPaymentIntent } from './checkoutUtils';
 
 export function useCheckout(
   deliveryType: 'PICKUP' | 'DELIVERY',
@@ -17,25 +18,10 @@ export function useCheckout(
   const { enableDelivery } = useConfig();
   const [loading, setLoading] = useState(false);
 
-  async function fetchOrderByPaymentIntentId(
-    paymentIntentId: string,
-    retries = 2
-  ): Promise<{ id: string } | null> {
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      try {
-        const { data } = await api.get<{ id: string }>(
-          `/orders/by-payment-intent/${paymentIntentId}`
-        );
-        return data;
-      } catch (e) {
-        if (axios.isAxiosError(e) && e.response?.status === 404 && attempt < retries) {
-          await new Promise((r) => setTimeout(r, 800));
-          continue;
-        }
-        return null;
-      }
-    }
-    return null;
+  function navigateToOrder(orderId: string) {
+    (navigation as { navigate: (s: string, p: object) => void }).navigate('OrderDetail', {
+      orderId,
+    });
   }
 
   async function handleCheckout() {
@@ -63,9 +49,7 @@ export function useCheckout(
 
       if ('order' in data && data.clientSecret === null) {
         clearCart();
-        (navigation as { navigate: (s: string, p: object) => void }).navigate('OrderDetail', {
-          orderId: data.order.id,
-        });
+        navigateToOrder(data.order.id);
         setLoading(false);
         return;
       }
@@ -92,28 +76,7 @@ export function useCheckout(
         return;
       }
 
-      let order: { id: string } | null = null;
-      try {
-        const { data: orderData } = await api.post<{ id: string }>('/orders/from-payment-intent', {
-          paymentIntentId,
-        });
-        order = orderData;
-      } catch {
-        order = await fetchOrderByPaymentIntentId(paymentIntentId);
-      }
-      if (!order) {
-        Alert.alert(
-          'Order is being created',
-          'Check My Orders in a moment. Your payment was successful.'
-        );
-        clearCart();
-        setLoading(false);
-        return;
-      }
-      clearCart();
-      (navigation as { navigate: (s: string, p: object) => void }).navigate('OrderDetail', {
-        orderId: order.id,
-      });
+      await finalizeOrderFromPaymentIntent(paymentIntentId, clearCart, navigateToOrder);
     } catch (err) {
       const msg =
         axios.isAxiosError(err) && err.response?.data?.error
@@ -125,5 +88,11 @@ export function useCheckout(
     }
   }
 
-  return { handleCheckout, loading };
+  return {
+    handleCheckout,
+    loading,
+    pendingPayment: null,
+    onPaymentSuccess: async () => {},
+    onPaymentCancel: () => {},
+  };
 }
