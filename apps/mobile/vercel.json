@@ -1,0 +1,6 @@
+{
+  "framework": null,
+  "installCommand": "cd ../.. && pnpm install --frozen-lockfile --filter mobile...",
+  "buildCommand": "pnpm run build",
+  "outputDirectory": "dist"
+}

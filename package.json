@@ -12,6 +12,7 @@
     "build:api": "pnpm --filter api build",
     "build:restaurant": "pnpm --filter restaurant-dashboard build",
     "build:admin": "pnpm --filter admin build",
+    "build:mobile": "pnpm --filter mobile build",
     "db:generate": "pnpm --filter api exec prisma generate",
     "db:migrate": "pnpm --filter api exec prisma migrate dev",
     "db:push": "pnpm --filter api exec prisma db push",
